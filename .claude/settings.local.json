@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:explore.org)",
+      "WebFetch(domain:www.youtube.com)"
+    ]
+  }
+}
