@@ -29,6 +29,13 @@ export const SPECIES_EMOJI: Record<string, string> = {
   falcon: "🦅",
   rhino: "🦏",
   zebra: "🦓",
+  gorilla: "🦍",
+  bonobo: "🐒",
+  "polar bear": "🐻‍❄️",
+  curlew: "🐦",
+  roller: "🐦",
+  "mountain goat": "🐐",
+  goat: "🐐",
   default: "🐾",
 };
 
@@ -63,6 +70,23 @@ export const STREAM_WILDLIFE_CATEGORY: Record<string, WildlifeCategory> = {
   "west-end-bald-eagle": "bird",
   "castle-rock-falcons": "bird",
   "naledi-cat-eye": "mammal",
+  "audubon-osprey-nest": "bird",
+  "audubon-osprey-boat-house": "bird",
+  "mendenhall-glacier-goat": "mammal",
+  "bonobo-sanctuary-enclosure": "mammal",
+  "bonobo-sanctuary-nursery": "mammal",
+  "gorilla-forest-corridor": "mammal",
+  "polar-bear-wapusk": "mammal",
+  "european-roller-inside": "bird",
+  "european-roller-outside": "bird",
+  "homosassa-manatees": "aquatic",
+  "tau-waterhole": "mammal",
+  "olifants-river": "mammal",
+  "black-eagles-selati": "bird",
+  "rspb-osprey-nest": "bird",
+  "benji-balu-bear-external": "mammal",
+  "benji-balu-bear-yard": "mammal",
+  "curlew-country": "bird",
 };
 
 export const DETECTION_STALE_SECONDS = 300;
