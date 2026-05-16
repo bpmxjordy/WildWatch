@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import Navbar from "@/components/Navbar";
 import Providers from "@/components/Providers";
 import "./globals.css";
@@ -6,12 +8,16 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "WildWatch — Live Wildlife Detection",
   description:
-    "Browse 100+ wildlife livestreams with real-time AI species detection powered by SpeciesNet.",
+    "Browse wildlife livestreams with real-time AI species detection powered by SpeciesNet.",
+  icons: {
+    icon: "/icon.svg",
+    apple: "/icon.svg",
+  },
   openGraph: {
     title: "WildWatch — Live Wildlife Detection",
     description:
-      "Browse 100+ wildlife livestreams with real-time AI species detection.",
-    images: ["/og-image.png"],
+      "Browse wildlife livestreams with real-time AI species detection.",
+    siteName: "WildWatch",
   },
 };
 
@@ -39,6 +45,8 @@ export default function RootLayout({
           <Navbar />
           <main className="mx-auto max-w-page px-7 py-9">{children}</main>
         </Providers>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

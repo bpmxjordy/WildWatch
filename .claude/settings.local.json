@@ -2,7 +2,15 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:explore.org)",
-      "WebFetch(domain:www.youtube.com)"
+      "WebFetch(domain:www.youtube.com)",
+      "PowerShell(ffmpeg -version 2>&1)",
+      "PowerShell(Get-ChildItem -Path \"$env:USERPROFILE\\\\.cache\\\\kagglehub\" -Recurse -ErrorAction SilentlyContinue | Select-Object FullName, Length | Format-Table -AutoSize)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\BPMxJ\\\\.cache\\\\kagglehub\\\\models\\\\google\\\\speciesnet\\\\pyTorch\\\\v4.0.2a\\\\1\" | Select-Object Name, @{N='SizeMB';E={[math]::Round\\($_.Length/1MB,1\\)}})",
+      "PowerShell($dest = \"C:\\\\Users\\\\BPMxJ\\\\.cache\\\\kagglehub\\\\models\\\\google\\\\speciesnet\\\\pyTorch\\\\v4.0.2a\\\\1\\\\https___github.com_agentmorris_MegaDetector_releases_download_v5.0_md_v5a.0.0.pt\"; $url = \"https://github.com/agentmorris/MegaDetector/releases/download/v5.0/md_v5a.0.0.pt\"; Write-Host \"Downloading MegaDetector v5a \\(~280MB\\)...\"; Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing; Write-Host \"Done. Size: $\\([math]::Round\\(\\(Get-Item $dest\\).Length/1MB, 2\\)\\) MB\")",
+      "Bash(Get-ChildItem -Path \"D:\\\\AI\\\\WildWatch\\\\web\\\\src\" -Recurse -Filter \"*.tsx\" -o Name)",
+      "Bash(Select-Object -First 30)",
+      "Bash(npx next *)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp"
     ]
   }
 }
