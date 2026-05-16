@@ -9,7 +9,7 @@ export default function Navbar() {
             Wild<em className="font-normal not-italic text-accent-deep">Watch</em>
           </span>
           <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
-            Est. 2024
+            Est. 2026
           </span>
         </Link>
         <div className="flex items-center gap-1">
