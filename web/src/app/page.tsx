@@ -1,7 +1,7 @@
 import { createServerClient } from "@/lib/supabase/server";
 import StreamGrid from "@/components/StreamGrid";
 
-export const revalidate = 0;
+export const revalidate = 30;
 
 export default async function HomePage() {
   const supabase = await createServerClient();

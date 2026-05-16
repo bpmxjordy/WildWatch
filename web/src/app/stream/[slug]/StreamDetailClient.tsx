@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { Stream } from "@/lib/supabase/types";
-import { useStreamDetections } from "@/hooks/useStreamDetections";
+import type { Stream, Detection } from "@/lib/supabase/types";
 import StreamPlayer from "@/components/StreamPlayer";
 import DetectionBadge from "@/components/DetectionBadge";
 import DetectionTimeline from "@/components/DetectionTimeline";
@@ -10,11 +9,10 @@ import SnapshotGallery from "@/components/SnapshotGallery";
 
 interface Props {
   stream: Stream;
+  detections: Detection[];
 }
 
-export default function StreamDetailClient({ stream }: Props) {
-  const { detections, loading } = useStreamDetections(stream.id);
-
+export default function StreamDetailClient({ stream, detections }: Props) {
   return (
     <div>
       <Link
@@ -68,7 +66,7 @@ export default function StreamDetailClient({ stream }: Props) {
 
       <div className="grid gap-9 lg:grid-cols-2">
         <div>
-          <DetectionTimeline detections={detections} loading={loading} />
+          <DetectionTimeline detections={detections} loading={false} />
         </div>
         <div>
           <SnapshotGallery detections={detections} />

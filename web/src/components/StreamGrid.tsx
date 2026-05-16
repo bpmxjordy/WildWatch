@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import type { Stream } from "@/lib/supabase/types";
-import { useRealtimeDetections } from "@/hooks/useRealtimeDetections";
 import {
   DETECTION_STALE_SECONDS,
   STREAM_WILDLIFE_CATEGORY,
@@ -17,7 +16,7 @@ interface StreamGridProps {
 }
 
 export default function StreamGrid({ initialStreams }: StreamGridProps) {
-  const streams = useRealtimeDetections(initialStreams);
+  const streams = initialStreams;
   const [search, setSearch] = useState("");
   const [showAnimalsOnly, setShowAnimalsOnly] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<WildlifeCategory | "">("");

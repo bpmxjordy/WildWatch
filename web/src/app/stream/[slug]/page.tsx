@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { createServerClient } from "@/lib/supabase/server";
 import StreamDetailClient from "./StreamDetailClient";
 
-export const revalidate = 0;
+export const revalidate = 30;
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -28,6 +28,7 @@ export async function generateMetadata({ params }: PageProps) {
 export default async function StreamPage({ params }: PageProps) {
   const { slug } = await params;
   const supabase = await createServerClient();
+
   const { data: stream } = await supabase
     .from("streams")
     .select("*")
@@ -36,5 +37,12 @@ export default async function StreamPage({ params }: PageProps) {
 
   if (!stream) notFound();
 
-  return <StreamDetailClient stream={stream} />;
+  const { data: detections } = await supabase
+    .from("detections")
+    .select("*")
+    .eq("stream_id", stream.id)
+    .order("detected_at", { ascending: false })
+    .limit(5);
+
+  return <StreamDetailClient stream={stream} detections={detections ?? []} />;
 }

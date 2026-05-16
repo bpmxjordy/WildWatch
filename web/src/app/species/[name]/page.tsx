@@ -2,7 +2,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { getSpeciesEmoji } from "@/lib/utils";
 
-export const revalidate = 0;
+export const revalidate = 60;
 
 interface PageProps {
   params: Promise<{ name: string }>;
