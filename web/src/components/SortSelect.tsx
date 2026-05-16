@@ -12,11 +12,11 @@ export default function SortSelect({ value, onChange }: SortSelectProps) {
     <select
       value={value}
       onChange={(e) => onChange(e.target.value as SortOption)}
-      className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-green-500 focus:outline-none"
+      className="rounded-full border border-rule-2 bg-paper px-3 py-1.5 text-[12.5px] text-ink focus:border-accent focus:outline-none"
     >
       <option value="latest">Sort: Latest detection</option>
-      <option value="name">Sort: Name A–Z</option>
-      <option value="species">Sort: Species A–Z</option>
+      <option value="name">Sort: Name A-Z</option>
+      <option value="species">Sort: Species A-Z</option>
     </select>
   );
 }

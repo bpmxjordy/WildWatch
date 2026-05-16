@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 _url_cache: dict[str, tuple[str, float]] = {}
 _cache_lock = Lock()
-URL_CACHE_TTL = 1800  # 30 minutes
+URL_CACHE_TTL = 10800  # 3 hours — YouTube HLS URLs typically valid for 6h
 
 
 def _get_direct_url(source_url: str) -> str | None:
@@ -47,6 +47,11 @@ def _get_direct_url(source_url: str) -> str | None:
         return None
 
 
+def invalidate_cache(source_url: str) -> None:
+    with _cache_lock:
+        _url_cache.pop(source_url, None)
+
+
 def extract_frame(source_url: str, output_path: str) -> bool:
     direct_url = _get_direct_url(source_url)
     if not direct_url:
@@ -71,6 +76,8 @@ def extract_frame(source_url: str, output_path: str) -> bool:
             capture_output=True,
         )
         if result.returncode != 0:
+            # Cached URL may have expired — invalidate and let next cycle retry
+            invalidate_cache(source_url)
             logger.warning("ffmpeg failed: %s", result.stderr.decode(errors="replace")[:200])
             return False
         return Path(output_path).exists()

@@ -11,9 +11,9 @@ interface DetectionTimelineProps {
 export default function DetectionTimeline({ detections, loading }: DetectionTimelineProps) {
   if (loading) {
     return (
-      <div className="animate-pulse space-y-3">
+      <div className="animate-pulse space-y-0">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="h-12 rounded-lg bg-gray-800" />
+          <div key={i} className="h-14 border-b border-rule bg-paper" />
         ))}
       </div>
     );
@@ -21,41 +21,64 @@ export default function DetectionTimeline({ detections, loading }: DetectionTime
 
   if (detections.length === 0) {
     return (
-      <p className="py-8 text-center text-sm text-gray-500">
+      <p className="py-8 text-center font-serif text-sm italic text-muted">
         No detections yet for this stream.
       </p>
     );
   }
 
   return (
-    <div className="space-y-2">
-      {detections.map((d) => (
-        <div
-          key={d.id}
-          className="flex items-center gap-3 rounded-lg border border-gray-800 bg-gray-900 px-3 py-2"
-        >
-          <span className="text-lg">
-            {d.category === "animal"
-              ? getSpeciesEmoji(d.common_name)
-              : d.category === "person"
-              ? "👤"
-              : d.category === "vehicle"
-              ? "🚗"
-              : "⬜"}
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-white">
-              {d.common_name || d.category}
-            </p>
-            <p className="text-xs text-gray-500">
-              {confidencePercent(d.confidence)} confidence
-            </p>
+    <div className="flex flex-col">
+      {detections.map((d, i) => {
+        const conf = d.confidence ? Math.round(d.confidence * 100) : 0;
+        return (
+          <div
+            key={d.id}
+            className={`grid grid-cols-[88px_1fr_auto] items-center gap-4 px-1 py-3.5 cursor-pointer hover:bg-paper border-b border-rule ${
+              i === 0 ? "border-t border-rule" : ""
+            }`}
+          >
+            <div className="font-mono text-[11px] text-muted tracking-wide">
+              <span className="block text-[9.5px] uppercase tracking-[0.14em] opacity-70 mb-0.5">
+                {d.detected_at
+                  ? new Date(d.detected_at).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                    }).toUpperCase()
+                  : ""}
+              </span>
+              {d.detected_at
+                ? new Date(d.detected_at).toLocaleTimeString("en-US", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                    hour12: false,
+                  })
+                : ""}
+            </div>
+            <div className="flex items-baseline gap-2.5 flex-wrap">
+              <span className="font-serif text-[19px] font-medium tracking-tight text-ink">
+                {d.category === "animal"
+                  ? `${getSpeciesEmoji(d.common_name)} ${d.common_name || "Unknown"}`
+                  : d.category === "person"
+                  ? "Person"
+                  : d.category === "vehicle"
+                  ? "Vehicle"
+                  : "No detection"}
+              </span>
+            </div>
+            <div className="flex flex-col items-end gap-1 font-mono text-[10.5px] text-ink-2 tracking-wide">
+              <span>{conf}%</span>
+              <span className="h-[3px] w-[60px] overflow-hidden rounded-full bg-rule">
+                <span
+                  className="block h-full rounded-full bg-detect"
+                  style={{ width: `${conf}%` }}
+                />
+              </span>
+            </div>
           </div>
-          <span className="whitespace-nowrap text-xs text-gray-500">
-            {timeAgo(d.detected_at)}
-          </span>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

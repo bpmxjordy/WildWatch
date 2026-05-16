@@ -25,14 +25,44 @@ export const SPECIES_EMOJI: Record<string, string> = {
   jellyfish: "🪼",
   koala: "🐨",
   manatee: "🦭",
+  puffin: "🐦",
+  falcon: "🦅",
+  rhino: "🦏",
+  zebra: "🦓",
   default: "🐾",
 };
 
-export const CATEGORY_COLORS: Record<string, string> = {
-  animal: "bg-green-500",
-  person: "bg-blue-500",
-  vehicle: "bg-yellow-500",
-  blank: "bg-gray-400",
+export type WildlifeCategory = "mammal" | "bird" | "aquatic";
+
+export const WILDLIFE_CATEGORIES: Record<WildlifeCategory, { label: string; emoji: string }> = {
+  mammal: { label: "Mammals", emoji: "🐾" },
+  bird: { label: "Birds", emoji: "🐦" },
+  aquatic: { label: "Aquatic", emoji: "🐟" },
 };
 
-export const DETECTION_STALE_SECONDS = 120;
+export const STREAM_WILDLIFE_CATEGORY: Record<string, WildlifeCategory> = {
+  "decorah-eagles": "bird",
+  "puffin-boulder-berm": "bird",
+  "osprey-nest-chesapeake": "bird",
+  "tembe-elephant-park": "mammal",
+  "african-safari": "mammal",
+  "outdoor-rhino-cam": "mammal",
+  "nkorho-bush-lodge": "mammal",
+  "puffin-burrow": "bird",
+  "great-spirit-bluff-falcons": "bird",
+  "puffin-burrow-2": "bird",
+  "osprey-nest-charlo": "bird",
+  "underwater-reef-cam": "aquatic",
+  "underwater-reef-dock": "aquatic",
+  "puffin-loafing-ledge": "bird",
+  "back-channel-reef": "aquatic",
+  "zeabs-den": "mammal",
+  "boteti-river-zebra": "mammal",
+  "blue-cavern-aquarium": "aquatic",
+  "catalina-marine-reserve": "aquatic",
+  "west-end-bald-eagle": "bird",
+  "castle-rock-falcons": "bird",
+  "naledi-cat-eye": "mammal",
+};
+
+export const DETECTION_STALE_SECONDS = 300;

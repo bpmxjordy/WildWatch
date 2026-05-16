@@ -16,7 +16,7 @@ export function useStreamDetections(streamId: string) {
         .select("*")
         .eq("stream_id", streamId)
         .order("detected_at", { ascending: false })
-        .limit(50);
+        .limit(5);
       setDetections(data ?? []);
       setLoading(false);
     }
@@ -33,7 +33,7 @@ export function useStreamDetections(streamId: string) {
           filter: `stream_id=eq.${streamId}`,
         },
         (payload) => {
-          setDetections((prev) => [payload.new as Detection, ...prev].slice(0, 50));
+          setDetections((prev) => [payload.new as Detection, ...prev].slice(0, 5));
         }
       )
       .subscribe();

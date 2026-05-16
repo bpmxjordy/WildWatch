@@ -2,6 +2,36 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --bg: #f0f4ed;
+  --paper: #f5f7f2;
+  --paper-2: #eaefe4;
+  --ink: #1e3320;
+  --ink-2: #2d4a30;
+  --muted: #5a7a5e;
+  --muted-2: #92b096;
+  --rule: #d4e2cd;
+  --rule-2: #b4ceaa;
+  --accent: #507a42;
+  --accent-deep: #3d5e33;
+  --live: #d94040;
+  --detect: #6a9b5a;
+}
+
 body {
-  @apply bg-gray-950 text-white antialiased;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.005em;
+}
+
+@keyframes live-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(217, 64, 64, 0.4); }
+  60% { box-shadow: 0 0 0 6px rgba(217, 64, 64, 0); }
+}
+
+@keyframes detect-ping {
+  0%, 100% { opacity: 0.75; transform: scale(1); }
+  50% { opacity: 0; transform: scale(1.8); }
 }
