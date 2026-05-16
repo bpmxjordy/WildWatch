@@ -1,0 +1,30 @@
+version: "3.8"
+
+services:
+  wildwatch-agent:
+    build: .
+    container_name: wildwatch-agent
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # Persist model cache so it doesn't re-download on restart
+      - model-cache:/app/.cache
+      # Persist frames directory (optional, for debugging)
+      - ./frames:/app/frames
+    # Resource limits for Oracle free tier (ARM Ampere A1)
+    # Adjust based on your instance size (1-4 OCPUs, 6-24GB RAM)
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  model-cache:
