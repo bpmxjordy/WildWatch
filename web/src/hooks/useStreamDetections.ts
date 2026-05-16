@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Detection } from "@/lib/supabase/types";
 
 export function useStreamDetections(streamId: string) {
   const [detections, setDetections] = useState<Detection[]>([]);
   const [loading, setLoading] = useState(true);
-  const supabase = createClient();
+  const supabaseRef = useRef(createClient());
 
   useEffect(() => {
-    async function fetch() {
+    const supabase = supabaseRef.current;
+
+    async function fetchDetections() {
       const { data } = await supabase
         .from("detections")
         .select("*")
@@ -20,7 +22,7 @@ export function useStreamDetections(streamId: string) {
       setDetections(data ?? []);
       setLoading(false);
     }
-    fetch();
+    fetchDetections();
 
     const channel = supabase
       .channel(`detections-${streamId}`)
@@ -36,12 +38,16 @@ export function useStreamDetections(streamId: string) {
           setDetections((prev) => [payload.new as Detection, ...prev].slice(0, 5));
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR") {
+          console.debug("[WildWatch] Realtime not available for detections");
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, streamId]);
+  }, [streamId]);
 
   return { detections, loading };
 }

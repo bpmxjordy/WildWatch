@@ -104,7 +104,7 @@ export default function StreamGrid({ initialStreams }: StreamGridProps) {
   return (
     <div>
       <div className="border-y border-rule py-4 mb-7">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <FilterBar
             search={search}
             onSearchChange={setSearch}
