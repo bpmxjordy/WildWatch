@@ -4,6 +4,7 @@ import logging
 import os
 import subprocess
 import time
+import urllib.request
 from pathlib import Path
 from threading import Lock
 
@@ -15,6 +16,84 @@ _url_cache: dict[str, tuple[str, float]] = {}
 _cache_lock = Lock()
 URL_CACHE_TTL = 10800  # 3 hours — YouTube HLS URLs typically valid for 6h
 
+
+# ---------------------------------------------------------------------------
+# Platform-specific frame extraction
+# ---------------------------------------------------------------------------
+
+def _extract_jpeg(source_url: str, output_path: str) -> bool:
+    """Download a single JPEG snapshot (e.g. HDOnTap cameras)."""
+    try:
+        req = urllib.request.Request(source_url, headers={"User-Agent": "WildWatch/1.0"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = resp.read()
+        if len(data) < 1000:
+            logger.warning("JPEG too small (%d bytes) from %s", len(data), source_url)
+            return False
+        Path(output_path).write_bytes(data)
+        return True
+    except Exception as e:
+        logger.warning("JPEG download failed for %s: %s", source_url, e)
+        return False
+
+
+def _extract_mjpeg(source_url: str, output_path: str) -> bool:
+    """Grab one frame from an MJPEG stream using ffmpeg."""
+    try:
+        result = subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-i", source_url,
+                "-frames:v", "1",
+                "-q:v", "2",
+                "-vf", f"scale='min({FRAME_MAX_DIMENSION},iw)':-2",
+                output_path,
+            ],
+            timeout=15,
+            capture_output=True,
+        )
+        if result.returncode != 0:
+            logger.warning("ffmpeg mjpeg failed: %s", result.stderr.decode(errors="replace")[:200])
+            return False
+        return Path(output_path).exists()
+    except subprocess.TimeoutExpired:
+        logger.warning("ffmpeg mjpeg timed out for %s", source_url)
+        return False
+    except FileNotFoundError:
+        logger.error("ffmpeg not found")
+        return False
+
+
+def _extract_hls(source_url: str, output_path: str) -> bool:
+    """Grab one frame from an HLS (.m3u8) stream using ffmpeg."""
+    try:
+        result = subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-i", source_url,
+                "-frames:v", "1",
+                "-q:v", "2",
+                "-vf", f"scale='min({FRAME_MAX_DIMENSION},iw)':-2",
+                output_path,
+            ],
+            timeout=20,
+            capture_output=True,
+        )
+        if result.returncode != 0:
+            logger.warning("ffmpeg hls failed: %s", result.stderr.decode(errors="replace")[:200])
+            return False
+        return Path(output_path).exists()
+    except subprocess.TimeoutExpired:
+        logger.warning("ffmpeg hls timed out for %s", source_url)
+        return False
+    except FileNotFoundError:
+        logger.error("ffmpeg not found")
+        return False
+
+
+# ---------------------------------------------------------------------------
+# YouTube extraction (yt-dlp → ffmpeg)
+# ---------------------------------------------------------------------------
 
 def _get_direct_url(source_url: str) -> str | None:
     now = time.time()
@@ -58,7 +137,8 @@ def invalidate_cache(source_url: str) -> None:
         _url_cache.pop(source_url, None)
 
 
-def extract_frame(source_url: str, output_path: str) -> bool:
+def _extract_youtube(source_url: str, output_path: str) -> bool:
+    """Extract a frame from YouTube via yt-dlp + ffmpeg."""
     direct_url = _get_direct_url(source_url)
     if not direct_url:
         return False
@@ -66,23 +146,17 @@ def extract_frame(source_url: str, output_path: str) -> bool:
     try:
         result = subprocess.run(
             [
-                "ffmpeg",
-                "-y",
-                "-i",
-                direct_url,
-                "-frames:v",
-                "1",
-                "-q:v",
-                "2",
-                "-vf",
-                f"scale='min({FRAME_MAX_DIMENSION},iw)':-2",
+                "ffmpeg", "-y",
+                "-i", direct_url,
+                "-frames:v", "1",
+                "-q:v", "2",
+                "-vf", f"scale='min({FRAME_MAX_DIMENSION},iw)':-2",
                 output_path,
             ],
             timeout=15,
             capture_output=True,
         )
         if result.returncode != 0:
-            # Cached URL may have expired — invalidate and let next cycle retry
             invalidate_cache(source_url)
             logger.warning("ffmpeg failed: %s", result.stderr.decode(errors="replace")[:200])
             return False
@@ -93,3 +167,24 @@ def extract_frame(source_url: str, output_path: str) -> bool:
     except FileNotFoundError:
         logger.error("ffmpeg not found — install it and add to PATH")
         return False
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+_EXTRACTORS = {
+    "jpeg": _extract_jpeg,
+    "mjpeg": _extract_mjpeg,
+    "hls": _extract_hls,
+    "youtube": _extract_youtube,
+}
+
+
+def extract_frame(source_url: str, output_path: str, platform: str = "youtube") -> bool:
+    """Extract a single frame. Platform selects the extraction strategy."""
+    extractor = _EXTRACTORS.get(platform)
+    if extractor is None:
+        logger.error("Unknown platform %r for %s", platform, source_url)
+        return False
+    return extractor(source_url, output_path)

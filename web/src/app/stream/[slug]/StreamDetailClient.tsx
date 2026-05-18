@@ -36,7 +36,12 @@ export default function StreamDetailClient({ stream, detections }: Props) {
       </div>
 
       <div className="relative mb-5 aspect-video overflow-hidden rounded-md bg-paper-2 shadow-[0_1px_0_rgba(255,255,255,0.6)_inset,0_14px_44px_rgba(0,0,0,0.14)]">
-        <StreamPlayer embedUrl={stream.embed_url} name={stream.name} />
+        <StreamPlayer
+          embedUrl={stream.embed_url}
+          name={stream.name}
+          thumbnailUrl={stream.latest_detection_thumbnail_url || stream.thumbnail_url}
+          platform={stream.platform}
+        />
       </div>
 
       {stream.description && (

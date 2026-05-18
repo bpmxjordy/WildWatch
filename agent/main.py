@@ -35,7 +35,8 @@ def extract_frame_for_stream(stream: dict) -> tuple[dict, str | None]:
     """Extract a frame for a stream. Returns (stream, frame_path or None)."""
     slug = stream["slug"]
     frame_path = os.path.join(FRAMES_DIR, f"{slug}.jpg")
-    success = extract_frame(stream["source_url"], frame_path)
+    platform = stream.get("platform") or "youtube"
+    success = extract_frame(stream["source_url"], frame_path, platform=platform)
     if success:
         return (stream, frame_path)
     return (stream, None)

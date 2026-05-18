@@ -36,6 +36,11 @@ export const SPECIES_EMOJI: Record<string, string> = {
   roller: "🐦",
   "mountain goat": "🐐",
   goat: "🐐",
+  horse: "🐴",
+  elk: "🫎",
+  flamingo: "🦩",
+  lemur: "🐒",
+  turkey: "🦃",
   default: "🐾",
 };
 
@@ -87,6 +92,28 @@ export const STREAM_WILDLIFE_CATEGORY: Record<string, WildlifeCategory> = {
   "benji-balu-bear-external": "mammal",
   "benji-balu-bear-yard": "mammal",
   "curlew-country": "bird",
+  // HDOnTap cameras
+  "pa-farm-country-eagles": "bird",
+  "west-michigan-eagles": "bird",
+  "dollywood-eagles": "bird",
+  "sw-florida-river-wildlife": "bird",
+  "loveland-ospreys": "bird",
+  "richmond-peregrine-falcon": "bird",
+  "hilton-head-eagles": "bird",
+  "off-exhibit-red-wolves": "mammal",
+  "greenhorn-ranch-arena": "mammal",
+  "leesburg-deer-feeder": "mammal",
+  "frankie-fifi-hada-horses": "mammal",
+  "american-prairie-bison": "mammal",
+  "montana-grasslands-bison": "mammal",
+  "fishers-island-ospreys": "bird",
+  "birch-aquarium-kelp": "aquatic",
+  "greenhorn-dude-ranch-saloon": "mammal",
+  "midpeninsula-open-space": "mammal",
+  "reid-park-zoo-elephants": "mammal",
+  "reid-park-zoo-flamingos": "bird",
+  "reid-park-zoo-lemurs": "mammal",
+  "tennessee-elk": "mammal",
 };
 
 export const DETECTION_STALE_SECONDS = 300;
