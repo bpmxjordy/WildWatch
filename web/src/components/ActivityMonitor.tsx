@@ -1,12 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { createClient } from "@/lib/supabase/client";
 
 interface HourlyData {
   hour: number;
@@ -33,7 +28,8 @@ export default function ActivityMonitor({ streamId }: Props) {
 
   useEffect(() => {
     async function fetch() {
-      const { data, error } = await supabase.rpc("get_hourly_activity", {
+      const supabase = createClient();
+      const { data, error } = await (supabase as any).rpc("get_hourly_activity", {
         p_stream_id: streamId,
       });
       if (!error && data) setRawData(data);

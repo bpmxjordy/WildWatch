@@ -1,13 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase/client";
 import { getSpeciesEmoji, timeAgo } from "@/lib/utils";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 interface SpeciesRow {
   common_name: string;
@@ -27,7 +22,8 @@ export default function SpeciesBreakdown({ streamId }: Props) {
 
   useEffect(() => {
     async function fetch() {
-      const { data: rows, error } = await supabase.rpc("get_species_breakdown", {
+      const supabase = createClient();
+      const { data: rows, error } = await (supabase as any).rpc("get_species_breakdown", {
         p_stream_id: streamId,
       });
       if (!error && rows) setData(rows);
