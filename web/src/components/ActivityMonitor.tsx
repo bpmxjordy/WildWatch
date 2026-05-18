@@ -83,11 +83,11 @@ function ActivityChart({ data, max, peakIdx }: { data: number[]; max: number; pe
           className="absolute z-50 pointer-events-none"
           style={{ left: hover.x, top: hover.y - 8, transform: "translate(-50%, -100%)" }}
         >
-          <div className="bg-ink text-bg font-mono text-[11px] font-medium px-3 py-1.5 rounded shadow-lg tracking-[0.04em] whitespace-nowrap">
+          <div className="bg-[#1e3320] text-white font-mono text-[11px] font-medium px-3 py-1.5 rounded shadow-lg tracking-[0.04em] whitespace-nowrap">
             {fmtHr(hover.idx)} · {data[hover.idx]} obs
           </div>
           <div className="flex justify-center">
-            <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[5px] border-t-ink" />
+            <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[5px] border-t-[#1e3320]" />
           </div>
         </div>
       )}
