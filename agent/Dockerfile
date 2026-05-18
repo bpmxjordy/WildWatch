@@ -3,10 +3,15 @@
 
 FROM python:3.11-slim AS base
 
-# Install system dependencies (ffmpeg + yt-dlp needs)
+# Install system dependencies (ffmpeg + deno for yt-dlp JS runtime)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    curl \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
+
+# Install deno (required by latest yt-dlp for YouTube JS player parsing)
+RUN curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh
 
 WORKDIR /app
 

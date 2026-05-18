@@ -12,6 +12,8 @@ services:
       - model-cache:/app/.cache
       # Persist frames directory (optional, for debugging)
       - ./frames:/app/frames
+      # YouTube cookies for yt-dlp authentication
+      - ./cookies.txt:/app/cookies.txt
     # Resource limits for Oracle free tier (ARM Ampere A1)
     # Adjust based on your instance size (1-4 OCPUs, 6-24GB RAM)
     deploy:

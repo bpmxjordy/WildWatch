@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -24,8 +25,13 @@ def _get_direct_url(source_url: str) -> str | None:
                 return url
 
     try:
+        cookies_path = os.path.join(os.path.dirname(__file__), "cookies.txt")
+        cmd = ["yt-dlp", "--get-url", "-f", "best[height<=720]"]
+        if os.path.exists(cookies_path):
+            cmd += ["--cookies", cookies_path]
+        cmd.append(source_url)
         result = subprocess.run(
-            ["yt-dlp", "--get-url", "-f", "best[height<=720]", source_url],
+            cmd,
             capture_output=True,
             text=True,
             timeout=30,
