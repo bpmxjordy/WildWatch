@@ -26,7 +26,7 @@ def _get_direct_url(source_url: str) -> str | None:
 
     try:
         cookies_path = os.path.join(os.path.dirname(__file__), "cookies.txt")
-        cmd = ["yt-dlp", "--get-url", "-f", "best[height<=720]"]
+        cmd = ["yt-dlp", "--get-url", "-f", "best[height<=720]", "--remote-components", "ejs:github"]
         if os.path.exists(cookies_path):
             cmd += ["--cookies", cookies_path]
         cmd.append(source_url)
