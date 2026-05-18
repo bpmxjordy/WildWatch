@@ -15,9 +15,8 @@ _insert_count: dict[str, int] = {}
 
 
 def upload_thumbnail(supabase: Client, stream_slug: str, frame_path: str) -> str | None:
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    timestamp = datetime.now(timezone.utc).strftime("%H%M%S")
-    storage_path = f"{stream_slug}/{today}/{timestamp}.jpg"
+    """Upload a single latest.jpg per stream, overwriting the previous one."""
+    storage_path = f"{stream_slug}/latest.jpg"
 
     with open(frame_path, "rb") as f:
         data = f.read()
@@ -26,7 +25,7 @@ def upload_thumbnail(supabase: Client, stream_slug: str, frame_path: str) -> str
         supabase.storage.from_("thumbnails").upload(
             storage_path,
             data,
-            {"content-type": "image/jpeg"},
+            {"content-type": "image/jpeg", "upsert": "true"},
         )
     except Exception as e:
         logger.warning("Thumbnail upload failed: %s", e)
@@ -114,9 +113,10 @@ def upsert_detection(
 
 
 def _prune_old_detections(supabase: Client, stream_id: str) -> None:
+    """Keep only the most recent MAX_DETECTIONS_PER_STREAM detections per stream."""
     result = (
         supabase.table("detections")
-        .select("id, thumbnail_path")
+        .select("id")
         .eq("stream_id", stream_id)
         .order("detected_at", desc=True)
         .execute()
@@ -125,22 +125,7 @@ def _prune_old_detections(supabase: Client, stream_id: str) -> None:
     if len(rows) <= MAX_DETECTIONS_PER_STREAM:
         return
 
-    old_rows = rows[MAX_DETECTIONS_PER_STREAM:]
-    old_ids = [r["id"] for r in old_rows]
-
-    paths_to_delete = []
-    for r in old_rows:
-        thumb = r.get("thumbnail_path")
-        if thumb and "/thumbnails/" in thumb:
-            path = thumb.split("/thumbnails/", 1)[1]
-            paths_to_delete.append(path)
-
-    if paths_to_delete:
-        try:
-            supabase.storage.from_("thumbnails").remove(paths_to_delete)
-        except Exception as e:
-            logger.warning("Failed to delete old thumbnails: %s", e)
-
+    old_ids = [r["id"] for r in rows[MAX_DETECTIONS_PER_STREAM:]]
     for oid in old_ids:
         supabase.table("detections").delete().eq("id", oid).execute()
 
