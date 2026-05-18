@@ -111,7 +111,7 @@ export default function ActivityMonitor({ streamId, longitude }: Props) {
       </div>
 
       {/* Chart */}
-      <div className="relative h-[160px] grid grid-cols-[repeat(24,1fr)] items-end gap-[3px] pb-[22px] border-b border-rule before:content-[''] before:absolute before:left-0 before:right-0 before:top-0 before:border-t before:border-dashed before:border-rule-2">
+      <div className="relative h-[160px] grid grid-cols-[repeat(24,1fr)] items-end gap-[3px] pb-[22px] border-b border-rule overflow-visible before:content-[''] before:absolute before:left-0 before:right-0 before:top-0 before:border-t before:border-dashed before:border-rule-2">
         {data.map((v, i) => {
           const isPeak = i === peakIdx;
           const night = isNight(i);
@@ -119,22 +119,23 @@ export default function ActivityMonitor({ streamId, longitude }: Props) {
           return (
             <div
               key={i}
-              className="relative cursor-default group flex items-end"
+              className="relative cursor-default group flex items-end overflow-visible"
               style={{ height: "100%" }}
             >
               {/* Bar */}
               <div
-                className={`w-full rounded-t-[1px] transition-colors duration-150 relative
+                className={`w-full rounded-t-[1px] transition-colors duration-150
                   ${isPeak ? (night ? "bg-accent" : "bg-accent-deep") : night ? "bg-ink-2/40" : "bg-ink-2"}
                   group-hover:bg-accent-deep`}
                 style={{ height: `${heightPct}%`, minHeight: v > 0 ? 3 : 1 }}
+              />
+              {/* Tooltip — positioned from bottom of wrapper by bar height */}
+              <div
+                className="absolute left-1/2 -translate-x-1/2 z-20 bg-ink text-bg font-mono text-[11px] font-medium px-3 py-1.5 rounded whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 tracking-[0.04em] shadow-lg"
+                style={{ bottom: `calc(${heightPct}% + 10px)` }}
               >
-                {/* Tooltip — anchored to top of bar */}
-                <div className="absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 z-20 bg-ink text-bg font-mono text-[11px] font-medium px-3 py-1.5 rounded whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-150 tracking-[0.04em] shadow-lg">
-                  {fmtHr(i)} · {v} obs
-                  {/* Arrow */}
-                  <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[5px] border-t-ink" />
-                </div>
+                {fmtHr(i)} · {v} obs
+                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[5px] border-t-ink" />
               </div>
             </div>
           );
