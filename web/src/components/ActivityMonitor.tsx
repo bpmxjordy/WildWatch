@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 interface HourlyData {
@@ -32,6 +32,67 @@ function fmtHr(h: number): string {
 
 function isNight(h: number): boolean {
   return h < 6 || h >= 19;
+}
+
+function ActivityChart({ data, max, peakIdx }: { data: number[]; max: number; peakIdx: number }) {
+  const [hover, setHover] = useState<{ idx: number; x: number; y: number } | null>(null);
+  const chartRef = useRef<HTMLDivElement>(null);
+
+  return (
+    <div className="relative">
+      <div
+        ref={chartRef}
+        className="relative h-[160px] grid grid-cols-[repeat(24,1fr)] items-end gap-[3px] pb-[22px] border-b border-rule before:content-[''] before:absolute before:left-0 before:right-0 before:top-0 before:border-t before:border-dashed before:border-rule-2"
+      >
+        {data.map((v, i) => {
+          const isPeak = i === peakIdx;
+          const night = isNight(i);
+          const heightPct = v === 0 ? 0 : Math.max((v / max) * 100, 3);
+          return (
+            <div
+              key={i}
+              className="flex items-end cursor-default"
+              style={{ height: "100%" }}
+              onMouseEnter={(e) => {
+                const rect = chartRef.current?.getBoundingClientRect();
+                const barRect = e.currentTarget.getBoundingClientRect();
+                if (rect) {
+                  setHover({
+                    idx: i,
+                    x: barRect.left + barRect.width / 2 - rect.left,
+                    y: barRect.bottom - barRect.height * (heightPct / 100) - rect.top,
+                  });
+                }
+              }}
+              onMouseLeave={() => setHover(null)}
+            >
+              <div
+                className={`w-full rounded-t-[1px] transition-colors duration-150
+                  ${isPeak ? (night ? "bg-accent" : "bg-accent-deep") : night ? "bg-ink-2/40" : "bg-ink-2"}
+                  ${hover?.idx === i ? "!bg-accent-deep" : ""}`}
+                style={{ height: `${heightPct}%`, minHeight: v > 0 ? 3 : 1 }}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Single floating tooltip */}
+      {hover !== null && (
+        <div
+          className="absolute z-50 pointer-events-none"
+          style={{ left: hover.x, top: hover.y - 8, transform: "translate(-50%, -100%)" }}
+        >
+          <div className="bg-ink text-bg font-mono text-[11px] font-medium px-3 py-1.5 rounded shadow-lg tracking-[0.04em] whitespace-nowrap">
+            {fmtHr(hover.idx)} · {data[hover.idx]} obs
+          </div>
+          <div className="flex justify-center">
+            <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[5px] border-t-ink" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function ActivityMonitor({ streamId, longitude }: Props) {
@@ -111,36 +172,7 @@ export default function ActivityMonitor({ streamId, longitude }: Props) {
       </div>
 
       {/* Chart */}
-      <div className="relative h-[160px] grid grid-cols-[repeat(24,1fr)] items-end gap-[3px] pb-[22px] border-b border-rule overflow-visible before:content-[''] before:absolute before:left-0 before:right-0 before:top-0 before:border-t before:border-dashed before:border-rule-2">
-        {data.map((v, i) => {
-          const isPeak = i === peakIdx;
-          const night = isNight(i);
-          const heightPct = v === 0 ? 0 : Math.max((v / max) * 100, 3);
-          return (
-            <div
-              key={i}
-              className="relative cursor-default group flex items-end overflow-visible"
-              style={{ height: "100%" }}
-            >
-              {/* Bar */}
-              <div
-                className={`w-full rounded-t-[1px] transition-colors duration-150
-                  ${isPeak ? (night ? "bg-accent" : "bg-accent-deep") : night ? "bg-ink-2/40" : "bg-ink-2"}
-                  group-hover:bg-accent-deep`}
-                style={{ height: `${heightPct}%`, minHeight: v > 0 ? 3 : 1 }}
-              />
-              {/* Tooltip — positioned from bottom of wrapper by bar height */}
-              <div
-                className="absolute left-1/2 -translate-x-1/2 z-20 bg-ink text-bg font-mono text-[11px] font-medium px-3 py-1.5 rounded whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 tracking-[0.04em] shadow-lg"
-                style={{ bottom: `calc(${heightPct}% + 10px)` }}
-              >
-                {fmtHr(i)} · {v} obs
-                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[5px] border-t-ink" />
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <ActivityChart data={data} max={max} peakIdx={peakIdx} />
 
       {/* Axis labels */}
       <div className="flex justify-between mt-2 font-mono text-[9px] tracking-[0.1em] text-muted px-0">
