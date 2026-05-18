@@ -10,6 +10,18 @@ interface HourlyData {
 
 interface Props {
   streamId: string;
+  longitude: number | null;
+}
+
+/** Approximate UTC offset from longitude (e.g. longitude 35 -> +2h) */
+function getUtcOffset(longitude: number | null): number {
+  if (longitude === null) return 0;
+  return Math.round(longitude / 15);
+}
+
+/** Convert a UTC hour to local hour given an offset */
+function utcToLocal(utcHour: number, offset: number): number {
+  return ((utcHour + offset) % 24 + 24) % 24;
 }
 
 function fmtHr(h: number): string {
@@ -22,9 +34,10 @@ function isNight(h: number): boolean {
   return h < 6 || h >= 19;
 }
 
-export default function ActivityMonitor({ streamId }: Props) {
+export default function ActivityMonitor({ streamId, longitude }: Props) {
   const [rawData, setRawData] = useState<HourlyData[]>([]);
   const [loading, setLoading] = useState(true);
+  const offset = getUtcOffset(longitude);
 
   useEffect(() => {
     async function fetch() {
@@ -38,11 +51,15 @@ export default function ActivityMonitor({ streamId }: Props) {
     fetch();
   }, [streamId]);
 
-  // Fill all 24 hours (0-23), defaulting to 0
+  // Fill all 24 hours (0-23) in LOCAL time, defaulting to 0
   const data = useMemo(() => {
-    const map = new Map(rawData.map((r) => [r.hour, r.detection_count]));
+    const map = new Map<number, number>();
+    for (const r of rawData) {
+      const localHour = utcToLocal(r.hour, offset);
+      map.set(localHour, (map.get(localHour) ?? 0) + r.detection_count);
+    }
     return Array.from({ length: 24 }, (_, i) => map.get(i) ?? 0);
-  }, [rawData]);
+  }, [rawData, offset]);
 
   const max = Math.max(...data, 1);
   const total = data.reduce((a, b) => a + b, 0);
@@ -51,6 +68,8 @@ export default function ActivityMonitor({ streamId }: Props) {
   const minIdx = data.indexOf(minVal);
   const dayCount = data.reduce((a, v, i) => a + (isNight(i) ? 0 : v), 0);
   const dayPct = total > 0 ? Math.round((dayCount / total) * 100) : 0;
+
+  const tzLabel = offset >= 0 ? `UTC+${offset}` : `UTC${offset}`;
 
   if (loading) {
     return (
@@ -86,7 +105,7 @@ export default function ActivityMonitor({ streamId }: Props) {
       {/* Header */}
       <div className="flex items-baseline justify-between mb-[18px] pb-2.5 border-b border-rule">
         <h3 className="font-serif text-[22px] font-medium tracking-tight">
-          Activity by hour<em className="not-italic font-normal text-muted text-sm ml-2 italic">last 24h</em>
+          Activity by hour<em className="not-italic font-normal text-muted text-sm ml-2 italic">last 24h · {tzLabel}</em>
         </h3>
         <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-muted">{total} detections</span>
       </div>
@@ -96,29 +115,35 @@ export default function ActivityMonitor({ streamId }: Props) {
         {data.map((v, i) => {
           const isPeak = i === peakIdx;
           const night = isNight(i);
+          const heightPct = v === 0 ? 0 : Math.max((v / max) * 100, 3);
           return (
             <div
               key={i}
-              className={`relative rounded-t-[1px] min-h-[2px] cursor-default transition-all duration-150 group
-                ${isPeak ? (night ? "bg-accent" : "bg-accent-deep") : night ? "bg-ink-2/40" : "bg-ink-2"}
-                hover:bg-accent-deep hover:scale-y-[1.02] origin-bottom`}
-              style={{ height: `${(v / max) * 100}%` }}
+              className="relative min-h-0 cursor-default group"
+              style={{ height: "100%", display: "flex", alignItems: "flex-end" }}
             >
-              <span className="absolute bottom-[calc(100%+6px)] left-1/2 -translate-x-1/2 bg-ink text-bg font-mono text-[10px] px-1.5 py-[3px] rounded-[2px] whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity tracking-[0.04em]">
+              <div
+                className={`w-full rounded-t-[1px] transition-all duration-150
+                  ${isPeak ? (night ? "bg-accent" : "bg-accent-deep") : night ? "bg-ink-2/40" : "bg-ink-2"}
+                  hover:!bg-accent-deep`}
+                style={{ height: `${heightPct}%`, minHeight: v > 0 ? 3 : 1 }}
+              />
+              {/* Tooltip */}
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-10 bg-ink text-bg font-mono text-[10px] px-2 py-1 rounded-[2px] whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity tracking-[0.04em]">
                 {fmtHr(i)} · {v} obs
-              </span>
+              </div>
             </div>
           );
         })}
       </div>
 
-      {/* Axis */}
-      <div className="grid grid-cols-[repeat(24,1fr)] gap-[3px] mt-2 font-mono text-[9px] tracking-[0.1em] text-muted">
-        {Array.from({ length: 24 }, (_, i) => (
-          <span key={i} className={`text-center ${i % 6 === 0 ? "visible" : "invisible"}`}>
-            {i === 0 ? "12A" : i === 6 ? "6A" : i === 12 ? "12P" : i === 18 ? "6P" : ""}
-          </span>
-        ))}
+      {/* Axis labels */}
+      <div className="flex justify-between mt-2 font-mono text-[9px] tracking-[0.1em] text-muted px-0">
+        <span>12AM</span>
+        <span>6AM</span>
+        <span>12PM</span>
+        <span>6PM</span>
+        <span></span>
       </div>
 
       {/* Footer stats */}

@@ -68,7 +68,7 @@ export default function StreamDetailClient({ stream, detections }: Props) {
       </div>
 
       <div className="grid gap-10 lg:grid-cols-[1.45fr_1fr] mb-12">
-        <ActivityMonitor streamId={stream.id} />
+        <ActivityMonitor streamId={stream.id} longitude={stream.longitude} />
         <SpeciesBreakdown streamId={stream.id} />
       </div>
 
