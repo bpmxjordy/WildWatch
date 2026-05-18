@@ -42,7 +42,7 @@ export default async function StreamPage({ params }: PageProps) {
     .select("*")
     .eq("stream_id", stream.id)
     .order("detected_at", { ascending: false })
-    .limit(5);
+    .limit(20);
 
   return <StreamDetailClient stream={stream} detections={detections ?? []} />;
 }

@@ -6,6 +6,8 @@ import StreamPlayer from "@/components/StreamPlayer";
 import DetectionBadge from "@/components/DetectionBadge";
 import DetectionTimeline from "@/components/DetectionTimeline";
 import SnapshotGallery from "@/components/SnapshotGallery";
+import ActivityMonitor from "@/components/ActivityMonitor";
+import SpeciesBreakdown from "@/components/SpeciesBreakdown";
 
 interface Props {
   stream: Stream;
@@ -54,6 +56,21 @@ export default function StreamDetailClient({ stream, detections }: Props) {
           </div>
         </div>
       )}
+
+      {/* Camera Analytics */}
+      <div className="mb-5 flex items-baseline justify-between border-b border-rule pb-3.5">
+        <h2 className="font-serif text-[26px] font-medium tracking-tight text-ink">
+          Camera analytics
+        </h2>
+        <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-muted">
+          Automated · Last 7 days
+        </span>
+      </div>
+
+      <div className="grid gap-10 lg:grid-cols-[1.45fr_1fr] mb-12">
+        <ActivityMonitor streamId={stream.id} />
+        <SpeciesBreakdown streamId={stream.id} />
+      </div>
 
       <div className="mb-5 flex items-baseline justify-between border-b border-rule pb-3.5">
         <h2 className="font-serif text-[26px] font-medium tracking-tight text-ink">
