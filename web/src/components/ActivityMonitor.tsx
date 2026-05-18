@@ -119,18 +119,22 @@ export default function ActivityMonitor({ streamId, longitude }: Props) {
           return (
             <div
               key={i}
-              className="relative min-h-0 cursor-default group"
-              style={{ height: "100%", display: "flex", alignItems: "flex-end" }}
+              className="relative cursor-default group flex items-end"
+              style={{ height: "100%" }}
             >
+              {/* Bar */}
               <div
-                className={`w-full rounded-t-[1px] transition-all duration-150
+                className={`w-full rounded-t-[1px] transition-colors duration-150 relative
                   ${isPeak ? (night ? "bg-accent" : "bg-accent-deep") : night ? "bg-ink-2/40" : "bg-ink-2"}
-                  hover:!bg-accent-deep`}
+                  group-hover:bg-accent-deep`}
                 style={{ height: `${heightPct}%`, minHeight: v > 0 ? 3 : 1 }}
-              />
-              {/* Tooltip */}
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-10 bg-ink text-bg font-mono text-[10px] px-2 py-1 rounded-[2px] whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity tracking-[0.04em]">
-                {fmtHr(i)} · {v} obs
+              >
+                {/* Tooltip — anchored to top of bar */}
+                <div className="absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 z-20 bg-ink text-bg font-mono text-[11px] font-medium px-3 py-1.5 rounded whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-150 tracking-[0.04em] shadow-lg">
+                  {fmtHr(i)} · {v} obs
+                  {/* Arrow */}
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[5px] border-t-ink" />
+                </div>
               </div>
             </div>
           );
