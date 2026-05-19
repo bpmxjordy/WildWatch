@@ -87,6 +87,10 @@ def upsert_detection(
             }
         ).eq("id", stream_id).execute()
 
+    # Only insert into detections table for actual wildlife sightings
+    if category != "animal":
+        return
+
     bbox = parsed.get("bbox")
     supabase.table("detections").insert(
         {

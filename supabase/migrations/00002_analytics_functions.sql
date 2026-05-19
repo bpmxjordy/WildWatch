@@ -11,6 +11,7 @@ BEGIN
   FROM detections d
   WHERE d.stream_id = p_stream_id
     AND d.detected_at >= NOW() - INTERVAL '24 hours'
+    AND d.category = 'animal'
   GROUP BY EXTRACT(HOUR FROM d.detected_at AT TIME ZONE 'UTC')
   ORDER BY hour;
 END;
