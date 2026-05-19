@@ -7,8 +7,8 @@ from supabase import Client
 
 logger = logging.getLogger(__name__)
 
-MAX_DETECTIONS_PER_STREAM = 5
-PRUNE_EVERY_N = 5
+PRUNE_AGE_DAYS = 8  # Keep detections for 8 days (analytics looks at 7)
+PRUNE_EVERY_N = 20
 
 _last_detection: dict[str, str | None] = {}
 _insert_count: dict[str, int] = {}
@@ -117,23 +117,24 @@ def upsert_detection(
 
 
 def _prune_old_detections(supabase: Client, stream_id: str) -> None:
-    """Keep only the most recent MAX_DETECTIONS_PER_STREAM detections per stream."""
+    """Delete detections older than PRUNE_AGE_DAYS to keep the table lean."""
+    cutoff = (
+        datetime.now(timezone.utc)
+        .replace(hour=0, minute=0, second=0, microsecond=0)
+    )
+    from datetime import timedelta
+    cutoff = (cutoff - timedelta(days=PRUNE_AGE_DAYS)).isoformat()
+
     result = (
         supabase.table("detections")
-        .select("id")
+        .delete()
         .eq("stream_id", stream_id)
-        .order("detected_at", desc=True)
+        .lt("detected_at", cutoff)
         .execute()
     )
-    rows = result.data or []
-    if len(rows) <= MAX_DETECTIONS_PER_STREAM:
-        return
-
-    old_ids = [r["id"] for r in rows[MAX_DETECTIONS_PER_STREAM:]]
-    for oid in old_ids:
-        supabase.table("detections").delete().eq("id", oid).execute()
-
-    logger.debug("Pruned %d old detections for stream %s", len(old_ids), stream_id)
+    deleted = len(result.data) if result.data else 0
+    if deleted:
+        logger.debug("Pruned %d detections older than %d days for stream %s", deleted, PRUNE_AGE_DAYS, stream_id)
 
 
 def mark_stream_offline(supabase: Client, stream_id: str) -> None:
