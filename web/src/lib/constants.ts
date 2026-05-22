@@ -147,6 +147,7 @@ export const STREAM_WILDLIFE_CATEGORY: Record<string, WildlifeCategory> = {
   "oakland-giraffe-habitat": "mammal",
   "african-savanna-palm-desert": "mammal",
   "georgia-aquarium": "aquatic",
+  "grouse-mountain-bear-yard": "mammal",
 };
 
 export const DETECTION_STALE_SECONDS = 300;
