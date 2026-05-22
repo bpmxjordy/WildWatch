@@ -50,6 +50,8 @@ export const SPECIES_EMOJI: Record<string, string> = {
   cheetah: "🐆",
   hyena: "🐾",
   wildebeest: "🐃",
+  otter: "🦦",
+  "sea otter": "🦦",
   ferret: "🦡",
   "mole-rat": "🐀",
   "naked mole-rat": "🐀",
@@ -137,6 +139,14 @@ export const STREAM_WILDLIFE_CATEGORY: Record<string, WildlifeCategory> = {
   "smithsonian-elephant-cam": "mammal",
   "smithsonian-ferret-cam": "mammal",
   "smithsonian-naked-mole-rat": "mammal",
+  // Ozolio cameras
+  "grouse-mountain-bears-front": "mammal",
+  "grouse-mountain-bear-pond": "mammal",
+  "ozolio-madagascar": "mammal",
+  "ozolio-sea-otters": "aquatic",
+  "oakland-giraffe-habitat": "mammal",
+  "african-savanna-palm-desert": "mammal",
+  "georgia-aquarium": "aquatic",
 };
 
 export const DETECTION_STALE_SECONDS = 300;
