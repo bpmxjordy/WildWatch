@@ -50,7 +50,6 @@ export const SPECIES_EMOJI: Record<string, string> = {
   cheetah: "🐆",
   hyena: "🐾",
   wildebeest: "🐃",
-  panda: "🐼",
   ferret: "🦡",
   "mole-rat": "🐀",
   "naked mole-rat": "🐀",

@@ -44,6 +44,19 @@ export default function RootLayout({
         <Providers>
           <Navbar />
           <main className="mx-auto max-w-page px-7 py-9">{children}</main>
+          <footer className="border-t border-rule mt-12">
+            <div className="mx-auto max-w-page px-7 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <p className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-muted">
+                WildWatch — AI-powered wildlife detection
+              </p>
+              <a
+                href="mailto:JordanCartwright2000@gmail.com"
+                className="font-mono text-[10.5px] tracking-[0.06em] text-muted hover:text-ink transition-colors"
+              >
+                JordanCartwright2000@gmail.com
+              </a>
+            </div>
+          </footer>
         </Providers>
         <Analytics />
         <SpeedInsights />
