@@ -8,12 +8,20 @@ interface StreamPlayerProps {
 }
 
 /** Platforms where we link out instead of embedding */
-const EXTERNAL_PLATFORMS = new Set(["jpeg", "mjpeg"]);
+const EXTERNAL_PLATFORMS = new Set(["jpeg", "mjpeg", "hls"]);
+
+const PLATFORM_LABELS: Record<string, string> = {
+  jpeg: "Watch live on HDOnTap",
+  mjpeg: "Watch live stream",
+  hls: "Watch live on zoo website",
+};
 
 export default function StreamPlayer({ embedUrl, name, thumbnailUrl, platform }: StreamPlayerProps) {
   const isExternal = EXTERNAL_PLATFORMS.has(platform ?? "");
 
   if (isExternal) {
+    const linkLabel = PLATFORM_LABELS[platform ?? ""] ?? "Watch live";
+
     return (
       <div className="relative aspect-video w-full overflow-hidden rounded-md bg-paper-2">
         {thumbnailUrl ? (
@@ -37,7 +45,7 @@ export default function StreamPlayer({ embedUrl, name, thumbnailUrl, platform }:
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
             </svg>
-            Watch live on HDOnTap
+            {linkLabel}
           </span>
         </a>
       </div>

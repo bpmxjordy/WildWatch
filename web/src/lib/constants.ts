@@ -41,6 +41,19 @@ export const SPECIES_EMOJI: Record<string, string> = {
   flamingo: "🦩",
   lemur: "🐒",
   turkey: "🦃",
+  badger: "🦡",
+  oryx: "🦌",
+  springbok: "🦌",
+  giraffe: "🦒",
+  hippo: "🦛",
+  leopard: "🐆",
+  cheetah: "🐆",
+  hyena: "🐾",
+  wildebeest: "🐃",
+  panda: "🐼",
+  ferret: "🦡",
+  "mole-rat": "🐀",
+  "naked mole-rat": "🐀",
   default: "🐾",
 };
 
@@ -114,6 +127,17 @@ export const STREAM_WILDLIFE_CATEGORY: Record<string, WildlifeCategory> = {
   "reid-park-zoo-flamingos": "bird",
   "reid-park-zoo-lemurs": "mammal",
   "tennessee-elk": "mammal",
+  // YouTube streams
+  "birds-in-the-forest-germany": "bird",
+  "badgers-badgerwood": "mammal",
+  "namibia-namib-desert": "mammal",
+  "masai-mara-safari": "mammal",
+  // Smithsonian National Zoo
+  "smithsonian-panda-cam": "mammal",
+  "smithsonian-lion-cam": "mammal",
+  "smithsonian-elephant-cam": "mammal",
+  "smithsonian-ferret-cam": "mammal",
+  "smithsonian-naked-mole-rat": "mammal",
 };
 
 export const DETECTION_STALE_SECONDS = 300;

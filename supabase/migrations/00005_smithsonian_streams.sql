@@ -1,0 +1,9 @@
+-- Add 5 Smithsonian National Zoo HLS webcams
+INSERT INTO streams (slug, name, description, source_url, embed_url, platform, location_name, country_code, latitude, longitude, is_active, is_live)
+VALUES
+  ('smithsonian-panda-cam', 'Giant Panda Cam', 'Live cam of giant pandas Bao Li and Qing Bao at the Smithsonian National Zoo.', 'https://nzp-wowza01.si.edu/live_edge_panda25/smil:panda125_01.smil/playlist.m3u8', 'https://nationalzoo.si.edu/webcams/panda-cam', 'hls', 'Washington, DC', 'US', 38.93, -77.05, true, true),
+  ('smithsonian-lion-cam', 'Lion Cam', 'Live cam of African lions at the Smithsonian National Zoo.', 'https://nzp-wowza02.si.edu/live_edge_lion/smil:lion01_all.smil/playlist.m3u8', 'https://nationalzoo.si.edu/webcams/lion-cam', 'hls', 'Washington, DC', 'US', 38.93, -77.05, true, true),
+  ('smithsonian-elephant-cam', 'Elephant Cam', 'Live cam of Asian elephants at the Smithsonian National Zoo.', 'https://nzp-wowza01.si.edu/live_edge_elephant_zixi/elephant_zixi.smil/playlist.m3u8', 'https://nationalzoo.si.edu/webcams/elephant-cam', 'hls', 'Washington, DC', 'US', 38.93, -77.05, true, true),
+  ('smithsonian-ferret-cam', 'Black-footed Ferret Cam', 'Live cam of endangered black-footed ferrets at the Smithsonian Conservation Biology Institute.', 'https://nzp-wowza01.si.edu/live_edge_bff_01/bff_01_1080_all.smil/playlist.m3u8', 'https://nationalzoo.si.edu/webcams/black-footed-ferret-cam', 'hls', 'Washington, DC', 'US', 38.93, -77.05, true, true),
+  ('smithsonian-naked-mole-rat', 'Naked Mole-Rat Cam', 'Live cam of naked mole-rats at the Smithsonian National Zoo.', 'https://nzp-wowza02.si.edu/live_edge_nmr/nmr_1080_all.smil/playlist.m3u8', 'https://nationalzoo.si.edu/webcams/naked-mole-rat-cam', 'hls', 'Washington, DC', 'US', 38.93, -77.05, true, true)
+ON CONFLICT (slug) DO NOTHING;

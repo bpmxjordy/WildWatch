@@ -64,13 +64,45 @@ def _extract_mjpeg(source_url: str, output_path: str) -> bool:
         return False
 
 
+def _resolve_hls_chunklist(master_url: str) -> str | None:
+    """Fetch an HLS master playlist and return the highest-bandwidth chunklist URL.
+
+    Wowza servers embed rotating tokens in chunklist filenames, so we must
+    fetch the master playlist each time to get a fresh, valid chunklist URL.
+    """
+    try:
+        req = urllib.request.Request(master_url, headers={"User-Agent": "WildWatch/1.0"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+    except Exception as e:
+        logger.warning("Failed to fetch HLS master playlist %s: %s", master_url, e)
+        return None
+
+    # Parse variant streams — pick the first chunklist (highest bandwidth listed first)
+    from urllib.parse import urljoin
+    for line in body.splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            return urljoin(master_url, line)
+    return None
+
+
 def _extract_hls(source_url: str, output_path: str) -> bool:
-    """Grab one frame from an HLS (.m3u8) stream using ffmpeg."""
+    """Grab one frame from an HLS (.m3u8) stream using ffmpeg.
+
+    For Wowza-style streams with rotating chunklist tokens, we resolve a
+    fresh chunklist URL from the master playlist before passing to ffmpeg.
+    """
+    # Try resolving a fresh chunklist from the master playlist first
+    stream_url = _resolve_hls_chunklist(source_url)
+    if not stream_url:
+        stream_url = source_url  # Fallback to direct URL
+
     try:
         result = subprocess.run(
             [
                 "ffmpeg", "-y",
-                "-i", source_url,
+                "-i", stream_url,
                 "-frames:v", "1",
                 "-q:v", "2",
                 "-vf", f"scale='min({FRAME_MAX_DIMENSION},iw)':-2",
