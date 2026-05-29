@@ -1,0 +1,102 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: wildsight-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-wildsight}
+      POSTGRES_USER: ${POSTGRES_USER:-wildsight}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wildsight_dev}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-wildsight}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: wildsight-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: wildsight-backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-wildsight}:${POSTGRES_PASSWORD:-wildsight_dev}@postgres:5432/${POSTGRES_DB:-wildsight}
+      REDIS_URL: redis://redis:6379/0
+      FLASK_ENV: ${FLASK_ENV:-development}
+    ports:
+      - "${BACKEND_PORT:-5000}:5000"
+    volumes:
+      - ./data/models:/data/models
+      - ./data/frames:/data/frames
+      - ./data/exports:/data/exports
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000/api/v1/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    container_name: wildsight-frontend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      BACKEND_URL: http://backend:5000
+      BACKEND_PUBLIC_URL: http://localhost:${BACKEND_PORT:-5000}
+      FLASK_ENV: ${FLASK_ENV:-development}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:3000/', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      - backend
+
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile.cpu
+    container_name: wildsight-worker
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-wildsight}:${POSTGRES_PASSWORD:-wildsight_dev}@postgres:5432/${POSTGRES_DB:-wildsight}
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./data/models:/data/models
+      - ./data/frames:/data/frames
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:

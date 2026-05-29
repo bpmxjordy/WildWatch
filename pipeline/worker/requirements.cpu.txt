@@ -1,0 +1,14 @@
+torch>=2.3
+torchvision>=0.18
+ultralytics>=8.2
+onnxruntime>=1.18
+speciesnet>=5.0.0
+psycopg2-binary>=2.9
+sqlalchemy>=2.0
+redis>=5.0
+yt-dlp>=2024.0.0
+pillow>=10.0
+opencv-python-headless>=4.9
+python-dotenv>=1.0
+timezonefinder>=6.5
+requests>=2.31

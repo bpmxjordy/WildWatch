@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Models — WildSight{% endblock %}
+
+{% block content %}
+<h1 class="font-serif text-2xl font-bold tracking-tight mb-6">Models</h1>
+
+{% if models %}
+<div class="bg-white rounded-xl border border-rule overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-gray-50 border-b border-rule">
+      <tr>
+        <th class="text-left px-4 py-2.5 font-medium text-muted">Name</th>
+        <th class="text-left px-4 py-2.5 font-medium text-muted">Framework</th>
+        <th class="text-left px-4 py-2.5 font-medium text-muted">Precision</th>
+        <th class="text-left px-4 py-2.5 font-medium text-muted">Classes</th>
+        <th class="text-left px-4 py-2.5 font-medium text-muted">Size</th>
+        <th class="text-left px-4 py-2.5 font-medium text-muted">VRAM</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-rule">
+      {% for model in models %}
+      <tr class="hover:bg-gray-50/50">
+        <td class="px-4 py-3 font-medium">{{ model.name }}</td>
+        <td class="px-4 py-3"><span class="px-2 py-0.5 bg-gray-100 text-gray-700 text-xs rounded-md font-mono">{{ model.framework }}</span></td>
+        <td class="px-4 py-3 font-mono text-xs">{{ model.precision | upper }}</td>
+        <td class="px-4 py-3 text-muted">{{ model.class_names | length }}</td>
+        <td class="px-4 py-3 font-mono text-xs">{% if model.file_size_bytes %}{{ (model.file_size_bytes / 1048576) | round(1) }} MB{% else %}—{% endif %}</td>
+        <td class="px-4 py-3 font-mono text-xs">{% if model.gpu_memory_mb %}{{ model.gpu_memory_mb }} MB{% else %}—{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="bg-white rounded-xl border border-rule border-dashed p-8 text-center">
+  <p class="text-sm text-muted">No models uploaded.</p>
+</div>
+{% endif %}
+{% endblock %}

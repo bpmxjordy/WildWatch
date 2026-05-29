@@ -1,0 +1,18 @@
+# Data volumes (mounted at runtime)
+data/models/*
+data/frames/*
+data/exports/*
+!data/models/.gitkeep
+!data/frames/.gitkeep
+!data/exports/.gitkeep
+
+# Environment
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Docker
+*.log

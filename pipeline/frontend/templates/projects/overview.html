@@ -1,0 +1,409 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }} — WildSight{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+{% endblock %}
+
+{% block content %}
+<div x-data="dashboard()" x-init="init()">
+
+  <!-- Header -->
+  <div class="mb-6">
+    <a href="/" class="inline-flex items-center gap-1 text-sm text-muted hover:text-ink transition-colors mb-4">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+      Projects
+    </a>
+    <div class="flex items-start justify-between">
+      <div>
+        <h1 class="font-serif text-3xl font-bold tracking-tight">{{ project.name }}</h1>
+        {% if project.description %}
+        <p class="text-muted text-sm mt-1">{{ project.description }}</p>
+        {% endif %}
+      </div>
+      <div class="flex items-center gap-2">
+        <form method="POST" action="/projects/{{ project.id }}/toggle">
+          <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg shadow-sm transition-colors
+            {% if project.status == 'running' %}bg-red-50 text-red-700 border border-red-200 hover:bg-red-100
+            {% else %}bg-forest-600 text-white hover:bg-forest-700{% endif %}">
+            {% if project.status == 'running' %}
+              <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span> Stop
+            {% else %}
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> Start
+            {% endif %}
+          </button>
+        </form>
+        <a href="/projects/{{ project.id }}/edit" class="px-3 py-2 text-sm text-muted hover:text-ink border border-rule rounded-lg hover:bg-gray-50 transition-colors">Edit</a>
+        <a href="/projects/{{ project.id }}/analytics" class="px-3 py-2 text-sm text-forest-700 bg-forest-50 border border-forest-200 rounded-lg hover:bg-forest-100 transition-colors">Analytics</a>
+        <a href="/projects/{{ project.id }}/notifications" class="px-3 py-2 text-sm text-muted hover:text-ink border border-rule rounded-lg hover:bg-gray-50 transition-colors">Alerts</a>
+        <a href="/projects/{{ project.id }}/map" class="px-3 py-2 text-sm text-muted hover:text-ink border border-rule rounded-lg hover:bg-gray-50 transition-colors">Map</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status cards -->
+  <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-8">
+    <div class="bg-white rounded-xl border border-rule p-4">
+      <p class="text-[10px] font-mono uppercase tracking-wider text-muted mb-1">Status</p>
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full {% if project.status == 'running' %}bg-green-500 animate-pulse{% elif project.status == 'error' %}bg-red-500{% else %}bg-gray-400{% endif %}"></span>
+        <span class="font-semibold">{{ project.status | capitalize }}</span>
+      </div>
+    </div>
+    <div class="bg-white rounded-xl border border-rule p-4">
+      <p class="text-[10px] font-mono uppercase tracking-wider text-muted mb-1">Streams</p>
+      <span class="font-semibold text-lg">{{ streams | length }}</span>
+    </div>
+    <div class="bg-white rounded-xl border border-rule p-4">
+      <p class="text-[10px] font-mono uppercase tracking-wider text-muted mb-1">Models</p>
+      <span class="font-semibold text-lg">{{ models | length }}</span>
+    </div>
+    <div class="bg-white rounded-xl border border-rule p-4">
+      <p class="text-[10px] font-mono uppercase tracking-wider text-muted mb-1">Detections Today</p>
+      <span class="font-semibold text-lg" x-text="summary.detections_today ?? '—'"></span>
+    </div>
+    <div class="bg-white rounded-xl border border-rule p-4">
+      <p class="text-[10px] font-mono uppercase tracking-wider text-muted mb-1">Species Found</p>
+      <span class="font-semibold text-lg" x-text="summary.unique_species ?? '—'"></span>
+    </div>
+  </div>
+
+  <!-- Two-column: Camera Grid + Detection Feed -->
+  <div class="grid lg:grid-cols-3 gap-6 mb-8">
+
+    <!-- Camera Grid (2/3) -->
+    <div class="lg:col-span-2">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="font-serif text-xl font-semibold">Camera Feeds</h2>
+        <a href="/projects/{{ project.id }}/streams/new"
+           class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-forest-700 bg-forest-50 rounded-lg hover:bg-forest-100 transition-colors">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+          </svg>
+          Add Stream
+        </a>
+      </div>
+
+      {% if streams %}
+      <div class="grid gap-3 sm:grid-cols-2">
+        {% for stream in streams %}
+        <a href="/streams/{{ stream.id }}" class="group block bg-white rounded-xl border border-rule overflow-hidden hover:shadow-md transition-all">
+          <!-- Thumbnail -->
+          <div class="relative aspect-video bg-gray-100 overflow-hidden">
+            <div class="absolute inset-0 flex items-center justify-center text-muted" id="thumb-placeholder-{{ stream.id }}">
+              <svg class="w-10 h-10 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+              </svg>
+            </div>
+            <img src="{{ backend_url }}/frames/{{ stream.id }}.jpg"
+                 class="w-full h-full object-cover"
+                 onerror="this.style.display='none'"
+                 loading="lazy">
+            <!-- Status badge -->
+            <div class="absolute top-2 right-2">
+              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-mono uppercase backdrop-blur-sm
+                {% if stream.status == 'running' %}bg-green-500/90 text-white
+                {% elif stream.status == 'error' or stream.status == 'offline' %}bg-red-500/90 text-white
+                {% else %}bg-black/50 text-white{% endif %}">
+                <span class="w-1 h-1 rounded-full {% if stream.status == 'running' %}bg-white animate-pulse{% else %}bg-white/60{% endif %}"></span>
+                {{ stream.status }}
+              </span>
+            </div>
+            <!-- Platform badge -->
+            <div class="absolute bottom-2 left-2">
+              <span class="px-1.5 py-0.5 rounded-md text-[10px] font-mono bg-black/50 text-white backdrop-blur-sm">{{ stream.platform }}</span>
+            </div>
+          </div>
+          <!-- Info -->
+          <div class="p-3">
+            <h3 class="text-sm font-medium group-hover:text-forest-700 transition-colors truncate">{{ stream.name }}</h3>
+            <div class="flex items-center justify-between mt-1">
+              <span class="text-xs text-muted truncate">{{ stream.location_name or 'No location' }}</span>
+              {% if stream.last_frame_at %}
+              <span class="text-[10px] font-mono text-muted">{{ stream.last_frame_at[:16] }}</span>
+              {% endif %}
+            </div>
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="bg-white rounded-xl border border-rule border-dashed p-12 text-center">
+        <svg class="w-12 h-12 mx-auto mb-3 text-muted opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+        </svg>
+        <p class="text-sm text-muted mb-2">No camera streams added yet</p>
+        <a href="/projects/{{ project.id }}/streams/new" class="text-sm text-forest-600 hover:text-forest-700 font-medium">Add your first stream</a>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Detection Feed (1/3) -->
+    <div>
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="font-serif text-xl font-semibold">Detection Feed</h2>
+        <span class="text-[10px] font-mono uppercase tracking-wider text-muted"
+              x-text="recentDetections.length + ' recent'"></span>
+      </div>
+      <div class="bg-white rounded-xl border border-rule overflow-hidden">
+        <div class="max-h-[600px] overflow-y-auto divide-y divide-rule" id="detection-feed">
+          <template x-if="recentDetections.length === 0">
+            <div class="p-8 text-center">
+              <svg class="w-10 h-10 mx-auto mb-2 text-muted opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+              </svg>
+              <p class="text-xs text-muted">No detections yet</p>
+              <p class="text-[10px] text-muted mt-1">Start the project to begin detecting</p>
+            </div>
+          </template>
+          <template x-for="det in recentDetections" :key="det.id">
+            <div class="p-3 hover:bg-gray-50/50 transition-colors">
+              <div class="flex items-start gap-3">
+                <div class="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0" x-show="det.frame_path">
+                  <img :src="'{{ backend_url }}/frames/' + det.stream_id + '_annotated.jpg'"
+                       class="w-full h-full object-cover" onerror="this.parentElement.style.display='none'">
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm font-medium truncate" x-text="det.common_name || det.species_label || 'Unknown'"></span>
+                    <span class="px-1.5 py-0.5 bg-forest-50 text-forest-700 text-[10px] rounded font-mono"
+                          x-text="det.confidence ? (det.confidence * 100).toFixed(0) + '%' : ''"></span>
+                  </div>
+                  <div class="flex items-center gap-2 mt-0.5">
+                    <span class="text-[11px] text-muted truncate" x-text="det.stream_name"></span>
+                    <span class="text-[10px] text-muted font-mono" x-text="formatTime(det.detected_at)"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Worker Logs Panel -->
+  <div class="mb-8">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-serif text-xl font-semibold">Worker Logs</h2>
+      <div class="flex items-center gap-2">
+        <span class="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider"
+              :class="logsConnected ? 'text-green-600' : 'text-muted'">
+          <span class="w-1.5 h-1.5 rounded-full" :class="logsConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'"></span>
+          <span x-text="logsConnected ? 'Live' : 'Disconnected'"></span>
+        </span>
+        <button @click="clearLogs()" class="text-xs text-muted hover:text-ink transition-colors">Clear</button>
+        <button @click="logsAutoScroll = !logsAutoScroll"
+                class="text-xs transition-colors" :class="logsAutoScroll ? 'text-forest-600' : 'text-muted hover:text-ink'">
+          Auto-scroll <span x-text="logsAutoScroll ? 'ON' : 'OFF'"></span>
+        </button>
+      </div>
+    </div>
+    <div class="bg-gray-900 rounded-xl border border-gray-700 overflow-hidden">
+      <div class="max-h-72 overflow-y-auto p-4 font-mono text-xs leading-relaxed" id="logs-container"
+           :class="{ 'scroll-smooth': logsAutoScroll }">
+        <template x-if="logLines.length === 0">
+          <p class="text-gray-500">Waiting for worker logs...</p>
+        </template>
+        <template x-for="(line, i) in logLines" :key="i">
+          <div class="whitespace-pre-wrap"
+               :class="{
+                 'text-red-400': line.includes('[ERROR]'),
+                 'text-yellow-400': line.includes('[WARNING]'),
+                 'text-green-400': line.includes('[INFO]') && (line.includes('animal') || line.includes('Detection')),
+                 'text-gray-400': !line.includes('[ERROR]') && !line.includes('[WARNING]') && !(line.includes('[INFO]') && (line.includes('animal') || line.includes('Detection')))
+               }"
+               x-text="line"></div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <!-- Models section -->
+  <div class="mb-8">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-serif text-xl font-semibold">Models</h2>
+      <a href="/projects/{{ project.id }}/models/upload"
+         class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-forest-700 bg-forest-50 rounded-lg hover:bg-forest-100 transition-colors">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+        </svg>
+        Upload Model
+      </a>
+    </div>
+    {% if models %}
+    <div class="bg-white rounded-xl border border-rule overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 border-b border-rule">
+          <tr>
+            <th class="text-left px-4 py-2 font-medium text-muted text-xs">Name</th>
+            <th class="text-left px-4 py-2 font-medium text-muted text-xs">Framework</th>
+            <th class="text-left px-4 py-2 font-medium text-muted text-xs">Classes</th>
+            <th class="text-left px-4 py-2 font-medium text-muted text-xs">VRAM</th>
+            <th class="text-right px-4 py-2 font-medium text-muted text-xs"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-rule">
+          {% for model in models %}
+          <tr class="hover:bg-gray-50/50">
+            <td class="px-4 py-2.5 font-medium">
+              {{ model.name }}
+              {% if model.is_builtin %}
+              <span class="ml-1.5 px-1.5 py-0.5 bg-forest-50 text-forest-700 text-[9px] rounded font-mono uppercase">built-in</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-2.5"><span class="px-1.5 py-0.5 bg-gray-100 text-gray-700 text-[10px] rounded font-mono">{{ model.framework }}</span></td>
+            <td class="px-4 py-2.5 text-muted text-xs">{{ model.class_names | length }} classes</td>
+            <td class="px-4 py-2.5 font-mono text-xs">{% if model.gpu_memory_mb %}{{ model.gpu_memory_mb }} MB{% else %}—{% endif %}</td>
+            <td class="px-4 py-2.5 text-right">
+              {% if not model.is_builtin %}
+              <form method="POST" action="/models/{{ model.id }}/delete" class="inline" onsubmit="return confirm('Delete this model?')">
+                <button type="submit" class="text-red-500 hover:text-red-700 text-xs">Remove</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="bg-white rounded-xl border border-rule border-dashed p-8 text-center">
+      <p class="text-sm text-muted mb-2">No models uploaded yet</p>
+      <a href="/projects/{{ project.id }}/models/upload" class="text-sm text-forest-600 hover:text-forest-700 font-medium">Upload your first model</a>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Quick Activity Chart -->
+  <div class="bg-white rounded-xl border border-rule p-5 mb-8">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-serif text-lg font-semibold">Activity (7 days)</h2>
+      <a href="/projects/{{ project.id }}/analytics" class="text-xs text-forest-600 hover:text-forest-700 font-medium">View full analytics</a>
+    </div>
+    <div class="h-40">
+      <canvas id="activityChart"></canvas>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const BACKEND = '{{ backend_url }}';
+const PROJECT_ID = '{{ project.id }}';
+
+function dashboard() {
+  return {
+    summary: {},
+    recentDetections: [],
+    hourlyData: [],
+    activityChart: null,
+    logLines: [],
+    logsConnected: false,
+    logsAutoScroll: true,
+    socket: null,
+
+    async init() {
+      await this.fetchData();
+      this.initChart();
+      this.startPolling();
+      this.initLogs();
+    },
+
+    async fetchData() {
+      try {
+        const [summaryRes, recentRes, hourlyRes] = await Promise.all([
+          fetch(`${BACKEND}/api/v1/projects/${PROJECT_ID}/analytics/summary?range=7d`),
+          fetch(`${BACKEND}/api/v1/projects/${PROJECT_ID}/analytics/recent?limit=30`),
+          fetch(`${BACKEND}/api/v1/projects/${PROJECT_ID}/analytics/hourly?range=7d`),
+        ]);
+        this.summary = await summaryRes.json();
+        const recentData = await recentRes.json();
+        this.recentDetections = recentData.detections || [];
+        const hourlyJson = await hourlyRes.json();
+        this.hourlyData = hourlyJson.hours || [];
+        this.updateChart();
+      } catch (e) {
+        console.error('Failed to fetch data:', e);
+      }
+    },
+
+    initChart() {
+      const ctx = document.getElementById('activityChart');
+      if (!ctx) return;
+      this.activityChart = new Chart(ctx, {
+        type: 'bar',
+        data: { labels: [], datasets: [{ label: 'Detections', data: [], backgroundColor: 'rgba(45, 125, 45, 0.6)', borderRadius: 4 }] },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false }, ticks: { font: { size: 9, family: 'JetBrains Mono' }, maxTicksLimit: 12 } },
+            y: { beginAtZero: true, grid: { color: '#f0f0f0' }, ticks: { font: { size: 10 }, stepSize: 1 } }
+          }
+        }
+      });
+    },
+
+    updateChart() {
+      if (!this.activityChart || !this.hourlyData.length) return;
+      const labels = this.hourlyData.map(h => {
+        const d = new Date(h.hour);
+        return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' ' + d.getHours() + 'h';
+      });
+      this.activityChart.data.labels = labels;
+      this.activityChart.data.datasets[0].data = this.hourlyData.map(h => h.count);
+      this.activityChart.update();
+    },
+
+    startPolling() {
+      setInterval(() => this.fetchData(), 15000);
+    },
+
+    async initLogs() {
+      await this.fetchLogs();
+      this.logsConnected = true;
+      // Poll every 3 seconds for near real-time logs
+      setInterval(() => this.fetchLogs(), 3000);
+    },
+
+    async fetchLogs() {
+      try {
+        const res = await fetch(`${BACKEND}/api/v1/logs/worker`);
+        const data = await res.json();
+        const newLines = data.lines || [];
+        if (newLines.length !== this.logLines.length || (newLines.length > 0 && newLines[newLines.length-1] !== this.logLines[this.logLines.length-1])) {
+          this.logLines = newLines;
+          this.scrollLogs();
+        }
+        this.logsConnected = true;
+      } catch (e) {
+        this.logsConnected = false;
+      }
+    },
+
+    scrollLogs() {
+      if (!this.logsAutoScroll) return;
+      this.$nextTick(() => {
+        const el = document.getElementById('logs-container');
+        if (el) el.scrollTop = el.scrollHeight;
+      });
+    },
+
+    clearLogs() {
+      this.logLines = [];
+    },
+
+    formatTime(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    }
+  }
+}
+</script>
+{% endblock %}

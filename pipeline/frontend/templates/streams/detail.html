@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}{{ stream.name }} — WildSight{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+{% endblock %}
+
+{% block content %}
+<div x-data="streamPage()" x-init="init()">
+  <a href="/projects/{{ stream.project_id }}" class="inline-flex items-center gap-1 text-sm text-muted hover:text-ink transition-colors mb-4">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+    </svg>
+    Back to Project
+  </a>
+
+  <div class="flex items-start justify-between mb-6">
+    <div>
+      <h1 class="font-serif text-2xl font-bold tracking-tight">{{ stream.name }}</h1>
+      <div class="flex items-center gap-3 mt-1">
+        <span class="px-2 py-0.5 bg-gray-100 text-gray-700 text-xs rounded-md font-mono">{{ stream.platform }}</span>
+        {% if stream.location_name %}
+        <span class="text-sm text-muted">{{ stream.location_name }}</span>
+        {% endif %}
+        <span class="inline-flex items-center gap-1 text-xs
+          {% if stream.status == 'running' %}text-green-700{% elif stream.status == 'error' or stream.status == 'offline' %}text-red-700{% else %}text-gray-500{% endif %}">
+          <span class="w-1.5 h-1.5 rounded-full
+            {% if stream.status == 'running' %}bg-green-500{% elif stream.status == 'error' or stream.status == 'offline' %}bg-red-500{% else %}bg-gray-400{% endif %}"></span>
+          {{ stream.status | capitalize }}
+        </span>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <a href="/streams/{{ stream.id }}/edit" class="px-3 py-2 text-sm text-muted hover:text-ink border border-rule rounded-lg hover:bg-gray-50 transition-colors">Edit</a>
+      <form method="POST" action="/streams/{{ stream.id }}/delete" onsubmit="return confirm('Remove this stream?')">
+        <button type="submit" class="px-3 py-2 text-sm text-red-600 hover:text-red-700 border border-rule rounded-lg hover:bg-red-50 transition-colors">Remove</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Frame viewer + Info -->
+  <div class="grid lg:grid-cols-3 gap-6 mb-8">
+    <!-- Latest frame (2/3) -->
+    <div class="lg:col-span-2">
+      <div class="bg-white rounded-xl border border-rule overflow-hidden">
+        <div class="relative aspect-video bg-gray-100">
+          <img id="latest-frame" src="{{ backend_url }}/frames/{{ stream.id }}_annotated.jpg"
+               class="w-full h-full object-contain"
+               onerror="this.src='{{ backend_url }}/frames/{{ stream.id }}.jpg'; this.onerror=function(){document.getElementById('no-frame').style.display='flex';this.style.display='none';}">
+          <div id="no-frame" class="absolute inset-0 items-center justify-center text-muted hidden">
+            <div class="text-center">
+              <svg class="w-16 h-16 mx-auto mb-2 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+              </svg>
+              <p class="text-sm">No frame captured yet</p>
+            </div>
+          </div>
+        </div>
+        <div class="px-4 py-2 border-t border-rule flex items-center justify-between">
+          <span class="text-[10px] font-mono text-muted">Latest frame{% if stream.last_frame_at %} &middot; {{ stream.last_frame_at }}{% endif %}</span>
+          <button @click="refreshFrame()" class="text-xs text-forest-600 hover:text-forest-700 font-medium">Refresh</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stream info (1/3) -->
+    <div class="space-y-4">
+      <div class="bg-white rounded-xl border border-rule p-4 space-y-3">
+        <h3 class="font-serif text-sm font-semibold uppercase tracking-wider text-muted">Stream Info</h3>
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between"><span class="text-muted">Interval</span><span class="font-mono">{{ stream.frame_interval_seconds }}s</span></div>
+          <div class="flex justify-between"><span class="text-muted">Failures</span><span class="font-mono {% if stream.consecutive_failures > 0 %}text-red-600{% endif %}">{{ stream.consecutive_failures }}</span></div>
+          <div class="flex justify-between"><span class="text-muted">Active</span><span>{% if stream.is_active %}Yes{% else %}No{% endif %}</span></div>
+          {% if stream.timezone %}
+          <div class="flex justify-between"><span class="text-muted">Timezone</span><span class="font-mono text-xs">{{ stream.timezone }}</span></div>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if stream.latitude and stream.longitude %}
+      <div class="bg-white rounded-xl border border-rule overflow-hidden">
+        <div id="stream-map" class="h-40 z-0"></div>
+        <div class="px-3 py-2 border-t border-rule">
+          <span class="text-[10px] font-mono text-muted">{{ "%.4f"|format(stream.latitude) }}, {{ "%.4f"|format(stream.longitude) }}</span>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="bg-white rounded-xl border border-rule p-4">
+        <h3 class="font-serif text-sm font-semibold uppercase tracking-wider text-muted mb-2">Source</h3>
+        <p class="text-xs font-mono text-muted break-all">{{ stream.source_url }}</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detection history -->
+  <div class="bg-white rounded-xl border border-rule overflow-hidden">
+    <div class="px-5 py-4 border-b border-rule flex items-center justify-between">
+      <h2 class="font-serif text-lg font-semibold">Detection History</h2>
+      <span class="text-xs font-mono text-muted" x-text="detections.length + ' detections'"></span>
+    </div>
+
+    <template x-if="detections.length > 0">
+      <div class="divide-y divide-rule">
+        <template x-for="det in detections" :key="det.id">
+          <div class="px-5 py-3 flex items-center gap-4 hover:bg-gray-50/50 transition-colors">
+            <div class="w-14 h-14 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
+              <img :src="'{{ backend_url }}/frames/{{ stream.id }}_annotated.jpg'"
+                   class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<div class=\'flex items-center justify-center w-full h-full text-muted text-xs\'>—</div>'">
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-medium" x-text="det.common_name || det.species_label || 'Unknown'"></span>
+                <span class="px-1.5 py-0.5 bg-forest-50 text-forest-700 text-[10px] rounded font-mono"
+                      x-text="det.confidence ? (det.confidence * 100).toFixed(1) + '%' : ''"></span>
+              </div>
+              <span class="text-[10px] text-muted font-mono" x-text="det.detected_at ? new Date(det.detected_at).toLocaleString() : ''"></span>
+            </div>
+            <div x-show="det.bbox" class="text-[10px] font-mono text-muted hidden sm:block">
+              <span x-text="det.bbox ? `[${det.bbox.x1?.toFixed(2)}, ${det.bbox.y1?.toFixed(2)}, ${det.bbox.x2?.toFixed(2)}, ${det.bbox.y2?.toFixed(2)}]` : ''"></span>
+            </div>
+          </div>
+        </template>
+      </div>
+    </template>
+    <template x-if="detections.length === 0">
+      <div class="p-12 text-center">
+        <svg class="w-12 h-12 mx-auto mb-3 text-muted opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        <p class="text-sm text-muted">No detections recorded yet</p>
+        <p class="text-xs text-muted mt-1">Make sure the project is running and a model is assigned to this stream</p>
+      </div>
+    </template>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const BACKEND = '{{ backend_url }}';
+const STREAM_ID = '{{ stream.id }}';
+
+function streamPage() {
+  return {
+    detections: [],
+    async init() {
+      await this.fetchDetections();
+      setInterval(() => this.fetchDetections(), 15000);
+    },
+    async fetchDetections() {
+      try {
+        const res = await fetch(`${BACKEND}/api/v1/streams/${STREAM_ID}/detections?limit=50`);
+        this.detections = await res.json();
+      } catch (e) { console.error(e); }
+    },
+    refreshFrame() {
+      const img = document.getElementById('latest-frame');
+      img.src = img.src.split('?')[0] + '?t=' + Date.now();
+    }
+  }
+}
+
+{% if stream.latitude and stream.longitude %}
+document.addEventListener('DOMContentLoaded', function() {
+  const map = L.map('stream-map').setView([{{ stream.latitude }}, {{ stream.longitude }}], 12);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; CARTO', subdomains: 'abcd', maxZoom: 19,
+  }).addTo(map);
+  L.marker([{{ stream.latitude }}, {{ stream.longitude }}]).addTo(map);
+});
+{% endif %}
+</script>
+{% endblock %}

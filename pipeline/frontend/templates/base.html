@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}WildSight{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            forest: { 50: '#f0faf0', 100: '#d4f0d4', 200: '#a8e0a8', 300: '#6bc76b', 400: '#3fa53f', 500: '#2d7d2d', 600: '#236123', 700: '#1a4a1a', 800: '#123312', 900: '#0a1f0a' },
+            cream: { 50: '#fefcf7', 100: '#fdf8ed', 200: '#faf0d6', 300: '#f5e4b8' },
+            ink: '#1a1a1a',
+            muted: '#6b7280',
+            rule: '#e5e5e5',
+          },
+          fontFamily: {
+            serif: ['"Source Serif 4"', 'Georgia', 'serif'],
+            sans: ['"DM Sans"', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          maxWidth: { page: '1280px' },
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'DM Sans', system-ui, sans-serif; background: #fefcf7; color: #1a1a1a; }
+    .toast { animation: slideIn 0.3s ease-out, fadeOut 0.3s ease-in 2.7s forwards; }
+    @keyframes slideIn { from { transform: translateY(-1rem); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes fadeOut { to { opacity: 0; } }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body class="min-h-screen">
+  <!-- Navbar -->
+  <nav class="border-b border-rule bg-white/80 backdrop-blur-sm sticky top-0 z-50">
+    <div class="mx-auto max-w-page px-7 h-14 flex items-center justify-between">
+      <a href="/" class="font-serif text-xl font-bold tracking-tight text-forest-700">
+        WildSight
+      </a>
+      <div class="flex items-center gap-6">
+        <a href="/" class="text-sm font-medium text-muted hover:text-ink transition-colors">Projects</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Flash messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="fixed top-16 right-4 z-50 space-y-2">
+        {% for category, message in messages %}
+          <div class="toast px-4 py-2 rounded-lg shadow-lg text-sm font-medium
+            {% if category == 'error' %}bg-red-50 text-red-700 border border-red-200
+            {% else %}bg-forest-50 text-forest-700 border border-forest-200{% endif %}">
+            {{ message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <!-- Main content -->
+  <main class="mx-auto max-w-page px-7 py-8">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-rule mt-12">
+    <div class="mx-auto max-w-page px-7 py-6 flex items-center justify-between">
+      <p class="font-mono text-[10.5px] uppercase tracking-[0.14em] text-muted">
+        WildSight — Livestream Detection Pipeline
+      </p>
+    </div>
+  </footer>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

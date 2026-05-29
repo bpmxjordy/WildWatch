@@ -1,0 +1,17 @@
+FROM python:3.11-slim
+
+RUN useradd -m -r appuser
+
+WORKDIR /app
+
+COPY requirements.lite.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+RUN mkdir -p /data/models /data/frames
+RUN chown -R appuser:appuser /app /data
+
+USER appuser
+
+CMD ["python", "main.py"]

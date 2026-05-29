@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ project.name }} — WildSight{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto">
+  <a href="/projects/{{ project.id }}" class="inline-flex items-center gap-1 text-sm text-muted hover:text-ink transition-colors mb-6">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+    </svg>
+    Back to Project
+  </a>
+
+  <h1 class="font-serif text-2xl font-bold tracking-tight mb-6">Edit Project</h1>
+
+  <form method="POST" class="space-y-5">
+    <div>
+      <label for="name" class="block text-sm font-medium mb-1.5">Project Name</label>
+      <input type="text" id="name" name="name" required value="{{ project.name }}"
+             class="w-full px-3 py-2 border border-rule rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-forest-300 focus:border-forest-400 bg-white">
+    </div>
+    <div>
+      <label for="description" class="block text-sm font-medium mb-1.5">Description</label>
+      <textarea id="description" name="description" rows="3"
+                class="w-full px-3 py-2 border border-rule rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-forest-300 focus:border-forest-400 bg-white resize-none">{{ project.description or '' }}</textarea>
+    </div>
+    <div class="flex items-center gap-3 pt-2">
+      <button type="submit"
+              class="px-5 py-2 bg-forest-600 text-white text-sm font-medium rounded-lg hover:bg-forest-700 transition-colors shadow-sm">
+        Save Changes
+      </button>
+      <a href="/projects/{{ project.id }}" class="px-4 py-2 text-sm text-muted hover:text-ink transition-colors">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

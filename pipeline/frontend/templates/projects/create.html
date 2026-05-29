@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}New Project — WildSight{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto">
+  <a href="/" class="inline-flex items-center gap-1 text-sm text-muted hover:text-ink transition-colors mb-6">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+    </svg>
+    Back to Projects
+  </a>
+
+  <h1 class="font-serif text-2xl font-bold tracking-tight mb-6">Create New Project</h1>
+
+  <form method="POST" class="space-y-5">
+    <div>
+      <label for="name" class="block text-sm font-medium mb-1.5">Project Name</label>
+      <input type="text" id="name" name="name" required
+             class="w-full px-3 py-2 border border-rule rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-forest-300 focus:border-forest-400 bg-white"
+             placeholder="e.g. Alpine Kea Monitoring">
+    </div>
+
+    <div>
+      <label for="description" class="block text-sm font-medium mb-1.5">Description <span class="text-muted">(optional)</span></label>
+      <textarea id="description" name="description" rows="3"
+                class="w-full px-3 py-2 border border-rule rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-forest-300 focus:border-forest-400 bg-white resize-none"
+                placeholder="Describe the purpose of this detection pipeline..."></textarea>
+    </div>
+
+    <div class="flex items-center gap-3 pt-2">
+      <button type="submit"
+              class="px-5 py-2 bg-forest-600 text-white text-sm font-medium rounded-lg hover:bg-forest-700 transition-colors shadow-sm">
+        Create Project
+      </button>
+      <a href="/" class="px-4 py-2 text-sm text-muted hover:text-ink transition-colors">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

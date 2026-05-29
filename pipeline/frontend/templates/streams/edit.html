@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ stream.name }} — WildSight{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto" x-data="editStream()" x-init="init()">
+  <a href="/streams/{{ stream.id }}" class="inline-flex items-center gap-1 text-sm text-muted hover:text-ink transition-colors mb-6">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+    </svg>
+    Back to Stream
+  </a>
+
+  <h1 class="font-serif text-2xl font-bold tracking-tight mb-6">Edit Stream</h1>
+
+  <form @submit.prevent="saveStream()" class="space-y-6">
+    <!-- Basic info -->
+    <div class="bg-white rounded-xl border border-rule p-5 space-y-4">
+      <h2 class="font-serif text-lg font-semibold">Stream Source</h2>
+      <div>
+        <label class="block text-sm font-medium mb-1.5">Name</label>
+        <input type="text" x-model="form.name" required
+               class="w-full px-3 py-2 border border-rule rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-forest-300 bg-white">
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1.5">Source URL</label>
+        <input type="text" x-model="form.source_url" required
+               class="w-full px-3 py-2 border border-rule rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-forest-300 bg-white">
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium mb-1.5">Platform</label>
+          <select x-model="form.platform" class="w-full px-3 py-2 border border-rule rounded-lg text-sm bg-white">
+            <option value="youtube">YouTube</option>
+            <option value="rtsp">RTSP</option>
+            <option value="hls">HLS</option>
+            <option value="mjpeg">MJPEG</option>
+            <option value="jpeg">JPEG</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1.5">Frame Interval (s)</label>
+          <input type="number" x-model="form.frame_interval_seconds" min="5" max="3600"
+                 class="w-full px-3 py-2 border border-rule rounded-lg text-sm font-mono bg-white">
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1.5">Location Name</label>
+        <input type="text" x-model="form.location_name"
+               class="w-full px-3 py-2 border border-rule rounded-lg text-sm bg-white">
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium mb-1.5">Latitude</label>
+          <input type="number" x-model="form.latitude" step="any"
+                 class="w-full px-3 py-2 border border-rule rounded-lg text-sm font-mono bg-white">
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1.5">Longitude</label>
+          <input type="number" x-model="form.longitude" step="any"
+                 class="w-full px-3 py-2 border border-rule rounded-lg text-sm font-mono bg-white">
+        </div>
+      </div>
+    </div>
+
+    <!-- Model assignment -->
+    <div class="bg-white rounded-xl border border-rule p-5 space-y-4">
+      <h2 class="font-serif text-lg font-semibold">Detection Model</h2>
+
+      <div>
+        <label class="block text-sm font-medium mb-1.5">
+          Confidence Threshold: <span class="font-mono text-forest-700" x-text="(form.min_confidence * 100).toFixed(0) + '%'"></span>
+        </label>
+        <input type="range" x-model="form.min_confidence" min="0.1" max="0.99" step="0.05"
+               class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-forest-600">
+        <div class="flex justify-between text-[10px] text-muted mt-1">
+          <span>10% (more detections, more noise)</span>
+          <span>99% (fewer detections, higher quality)</span>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium mb-1.5">Assigned Model</label>
+        <select x-model="form.model_id" @change="onModelChange()" class="w-full px-3 py-2 border border-rule rounded-lg text-sm bg-white">
+          <option value="">No model assigned</option>
+          {% for model in models %}
+          <option value="{{ model.id }}">{{ model.name }} ({{ model.framework }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Class filter -->
+      <div x-show="selectedModelClasses.length > 0">
+        <label class="block text-sm font-medium mb-2">Active Classes <span class="text-muted">(uncheck to ignore)</span></label>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-48 overflow-y-auto">
+          <template x-for="cls in selectedModelClasses" :key="cls">
+            <label class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer text-sm">
+              <input type="checkbox" :value="cls" x-model="form.active_classes"
+                     class="rounded border-rule text-forest-600 focus:ring-forest-300">
+              <span x-text="cls"></span>
+            </label>
+          </template>
+        </div>
+        <div class="flex gap-2 mt-2">
+          <button type="button" @click="form.active_classes = [...selectedModelClasses]" class="text-xs text-forest-600 hover:text-forest-700">Select All</button>
+          <button type="button" @click="form.active_classes = []" class="text-xs text-muted hover:text-ink">Clear All</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <button type="submit" class="px-5 py-2 bg-forest-600 text-white text-sm font-medium rounded-lg hover:bg-forest-700 transition-colors shadow-sm">Save Changes</button>
+      <a href="/streams/{{ stream.id }}" class="px-4 py-2 text-sm text-muted hover:text-ink transition-colors">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const BACKEND = '{{ backend_url }}';
+const STREAM_ID = '{{ stream.id }}';
+const MODELS = {{ models_json | safe }};
+
+function editStream() {
+  return {
+    form: {
+      name: {{ stream.name | tojson }},
+      source_url: {{ stream.source_url | tojson }},
+      platform: {{ stream.platform | tojson }},
+      frame_interval_seconds: {{ stream.frame_interval_seconds }},
+      location_name: {{ (stream.location_name or "") | tojson }},
+      latitude: {{ stream.latitude or 'null' }},
+      longitude: {{ stream.longitude or 'null' }},
+      min_confidence: {{ stream.min_confidence or 0.5 }},
+      model_id: {{ (stream.model_id or "") | tojson }},
+      active_classes: {{ stream.active_classes | tojson }},
+    },
+    selectedModelClasses: [],
+
+    init() {
+      this.onModelChange();
+    },
+
+    onModelChange() {
+      const model = MODELS.find(m => m.id === this.form.model_id);
+      this.selectedModelClasses = model ? (model.class_names || []) : [];
+    },
+
+    async saveStream() {
+      const body = { ...this.form };
+      if (!body.model_id) body.model_id = null;
+      if (body.active_classes.length === 0 || body.active_classes.length === this.selectedModelClasses.length) {
+        body.active_classes = [];
+      }
+      const res = await fetch(`${BACKEND}/api/v1/streams/${STREAM_ID}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        window.location.href = `/streams/${STREAM_ID}`;
+      }
+    }
+  }
+}
+</script>
+{% endblock %}

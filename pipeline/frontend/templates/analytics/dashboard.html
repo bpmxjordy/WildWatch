@@ -1,0 +1,438 @@
+{% extends "base.html" %}
+{% block title %}Analytics — {{ project.name }} — WildSight{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+{% endblock %}
+
+{% block content %}
+<div x-data="analyticsPage()" x-init="init()">
+  <a href="/projects/{{ project.id }}" class="inline-flex items-center gap-1 text-sm text-muted hover:text-ink transition-colors mb-4">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+    </svg>
+    Back to Project
+  </a>
+
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="font-serif text-3xl font-bold tracking-tight">Analytics</h1>
+    <div class="flex items-center gap-3">
+    <!-- Export button -->
+    <a :href="`${BACKEND}/api/v1/projects/${PROJECT_ID}/export?range=${range}`"
+       class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-forest-700 bg-forest-50 border border-forest-200 rounded-lg hover:bg-forest-100 transition-colors"
+       target="_blank">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+      </svg>
+      Export PDF
+    </a>
+    <!-- Time range selector -->
+    <div class="flex items-center gap-1 bg-white border border-rule rounded-lg p-0.5">
+      <template x-for="r in ['24h', '7d', '30d', 'all']" :key="r">
+        <button @click="range = r; fetchAll()"
+                :class="range === r ? 'bg-forest-600 text-white' : 'text-muted hover:text-ink'"
+                class="px-3 py-1 text-xs font-medium rounded-md transition-colors"
+                x-text="r === 'all' ? 'All Time' : r.toUpperCase()"></button>
+      </template>
+    </div>
+    </div>
+  </div>
+
+  <!-- Summary cards -->
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+    <div class="bg-white rounded-xl border border-rule p-4">
+      <p class="text-[10px] font-mono uppercase tracking-wider text-muted mb-1">Total Detections</p>
+      <span class="font-semibold text-2xl" x-text="summary.total_detections ?? 0"></span>
+    </div>
+    <div class="bg-white rounded-xl border border-rule p-4">
+      <p class="text-[10px] font-mono uppercase tracking-wider text-muted mb-1">Unique Species</p>
+      <span class="font-semibold text-2xl" x-text="summary.unique_species ?? 0"></span>
+    </div>
+    <div class="bg-white rounded-xl border border-rule p-4">
+      <p class="text-[10px] font-mono uppercase tracking-wider text-muted mb-1">Active Streams</p>
+      <span class="font-semibold text-2xl" x-text="summary.active_streams ?? 0"></span>
+      <span class="text-xs text-muted" x-text="'/ ' + (summary.stream_count ?? 0)"></span>
+    </div>
+    <div class="bg-white rounded-xl border border-rule p-4">
+      <p class="text-[10px] font-mono uppercase tracking-wider text-muted mb-1">Today</p>
+      <span class="font-semibold text-2xl" x-text="summary.detections_today ?? 0"></span>
+    </div>
+  </div>
+
+  <!-- Charts row -->
+  <div class="grid lg:grid-cols-3 gap-6 mb-8">
+    <!-- Activity timeline (2/3) -->
+    <div class="lg:col-span-2 bg-white rounded-xl border border-rule p-5">
+      <h2 class="font-serif text-lg font-semibold mb-4">Activity Timeline</h2>
+      <div class="h-64">
+        <canvas id="timelineChart"></canvas>
+      </div>
+    </div>
+    <!-- Species breakdown (1/3) -->
+    <div class="bg-white rounded-xl border border-rule p-5">
+      <h2 class="font-serif text-lg font-semibold mb-4">Species Breakdown</h2>
+      <div class="h-64">
+        <canvas id="speciesChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Time-of-day × Day-of-week Heatmap + Hourly Distribution -->
+  <div class="grid lg:grid-cols-3 gap-6 mb-8">
+    <!-- Time heatmap (2/3) -->
+    <div class="lg:col-span-2 bg-white rounded-xl border border-rule p-5">
+      <h2 class="font-serif text-lg font-semibold mb-3">Activity Heatmap</h2>
+      <p class="text-xs text-muted mb-4">Detection frequency by day of week and hour of day</p>
+      <div class="overflow-x-auto">
+        <div class="min-w-[600px]">
+          <!-- Header row: hours -->
+          <div class="flex items-center gap-0.5 mb-0.5 pl-16">
+            <template x-for="h in 24" :key="h">
+              <div class="flex-1 text-center text-[8px] font-mono text-muted" x-text="(h-1).toString().padStart(2,'0')"></div>
+            </template>
+          </div>
+          <!-- Grid rows: days -->
+          <template x-for="(day, di) in ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']" :key="di">
+            <div class="flex items-center gap-0.5 mb-0.5">
+              <div class="w-14 text-right pr-2 text-[10px] font-medium text-muted" x-text="day"></div>
+              <template x-for="h in 24" :key="h">
+                <div class="flex-1 aspect-square rounded-sm cursor-default"
+                     :style="'background-color:' + getHeatColor(di, h-1)"
+                     :title="day + ' ' + (h-1) + ':00 — ' + getHeatCount(di, h-1) + ' detections'">
+                </div>
+              </template>
+            </div>
+          </template>
+          <!-- Legend -->
+          <div class="flex items-center gap-2 mt-3 pl-16">
+            <span class="text-[9px] text-muted">Less</span>
+            <div class="flex gap-0.5">
+              <div class="w-3 h-3 rounded-sm" style="background:#f0faf0"></div>
+              <div class="w-3 h-3 rounded-sm" style="background:#a8e0a8"></div>
+              <div class="w-3 h-3 rounded-sm" style="background:#3fa53f"></div>
+              <div class="w-3 h-3 rounded-sm" style="background:#236123"></div>
+              <div class="w-3 h-3 rounded-sm" style="background:#0a1f0a"></div>
+            </div>
+            <span class="text-[9px] text-muted">More</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Hourly distribution (1/3) -->
+    <div class="bg-white rounded-xl border border-rule p-5">
+      <h2 class="font-serif text-lg font-semibold mb-3">Peak Hours</h2>
+      <p class="text-xs text-muted mb-4">When are animals most active?</p>
+      <div class="h-52">
+        <canvas id="hourlyDistChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Species filter -->
+  <div class="mb-6" x-show="speciesData.length > 0">
+    <div class="flex items-center gap-2 flex-wrap">
+      <span class="text-xs font-medium text-muted uppercase tracking-wider mr-1">Filter by species:</span>
+      <button @click="selectedSpecies = null; fetchAll()"
+              class="px-2.5 py-1 rounded-full text-xs font-medium transition-colors"
+              :class="!selectedSpecies ? 'bg-forest-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'">
+        All
+      </button>
+      <template x-for="sp in speciesData" :key="sp.name">
+        <button @click="selectedSpecies = sp.name; fetchFiltered()"
+                class="px-2.5 py-1 rounded-full text-xs font-medium transition-colors"
+                :class="selectedSpecies === sp.name ? 'bg-forest-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                x-text="sp.name + ' (' + sp.count + ')'">
+        </button>
+      </template>
+    </div>
+  </div>
+
+  <!-- Filtered species detail card -->
+  <div x-show="selectedSpecies && speciesDetail" class="bg-white rounded-xl border border-forest-200 p-5 mb-6" x-transition>
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-serif text-lg font-semibold">
+        <span x-text="selectedSpecies"></span> — Detection Stats
+      </h2>
+      <button @click="selectedSpecies = null; fetchAll()" class="text-xs text-muted hover:text-ink">Clear filter</button>
+    </div>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div class="bg-forest-50 rounded-lg p-3">
+        <p class="text-[10px] font-mono uppercase text-forest-600 mb-0.5">Detections</p>
+        <span class="text-xl font-bold text-forest-800" x-text="speciesDetail.count || 0"></span>
+      </div>
+      <div class="bg-forest-50 rounded-lg p-3">
+        <p class="text-[10px] font-mono uppercase text-forest-600 mb-0.5">Avg Confidence</p>
+        <span class="text-xl font-bold text-forest-800" x-text="speciesDetail.avg_confidence ? (speciesDetail.avg_confidence * 100).toFixed(0) + '%' : '—'"></span>
+      </div>
+      <div class="bg-forest-50 rounded-lg p-3">
+        <p class="text-[10px] font-mono uppercase text-forest-600 mb-0.5">First Seen</p>
+        <span class="text-sm font-mono text-forest-800" x-text="speciesDetail.first_seen || '—'"></span>
+      </div>
+      <div class="bg-forest-50 rounded-lg p-3">
+        <p class="text-[10px] font-mono uppercase text-forest-600 mb-0.5">Last Seen</p>
+        <span class="text-sm font-mono text-forest-800" x-text="speciesDetail.last_seen || '—'"></span>
+      </div>
+    </div>
+    <!-- Filtered timeline -->
+    <div class="mt-4 h-40">
+      <canvas id="filteredTimelineChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Per-stream stats table -->
+  <div class="bg-white rounded-xl border border-rule overflow-hidden mb-8">
+    <div class="px-5 py-4 border-b border-rule">
+      <h2 class="font-serif text-lg font-semibold">Stream Performance</h2>
+    </div>
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 border-b border-rule">
+        <tr>
+          <th class="text-left px-4 py-2 font-medium text-muted text-xs">Stream</th>
+          <th class="text-left px-4 py-2 font-medium text-muted text-xs">Status</th>
+          <th class="text-left px-4 py-2 font-medium text-muted text-xs">Platform</th>
+          <th class="text-right px-4 py-2 font-medium text-muted text-xs">Detections</th>
+          <th class="text-right px-4 py-2 font-medium text-muted text-xs">Species</th>
+          <th class="text-right px-4 py-2 font-medium text-muted text-xs">Last Detection</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-rule">
+        <template x-for="s in streamStats" :key="s.id">
+          <tr class="hover:bg-gray-50/50">
+            <td class="px-4 py-2.5">
+              <a :href="'/streams/' + s.id" class="font-medium hover:text-forest-700 transition-colors" x-text="s.name"></a>
+              <p class="text-[10px] text-muted" x-text="s.location_name || ''"></p>
+            </td>
+            <td class="px-4 py-2.5">
+              <span class="inline-flex items-center gap-1 text-[10px] font-mono uppercase"
+                    :class="s.status === 'running' ? 'text-green-700' : s.status === 'offline' ? 'text-red-700' : 'text-gray-500'">
+                <span class="w-1.5 h-1.5 rounded-full"
+                      :class="s.status === 'running' ? 'bg-green-500' : s.status === 'offline' ? 'bg-red-500' : 'bg-gray-400'"></span>
+                <span x-text="s.status"></span>
+              </span>
+            </td>
+            <td class="px-4 py-2.5"><span class="px-1.5 py-0.5 bg-gray-100 text-[10px] rounded font-mono" x-text="s.platform"></span></td>
+            <td class="px-4 py-2.5 text-right font-mono text-xs" x-text="s.count"></td>
+            <td class="px-4 py-2.5 text-right font-mono text-xs" x-text="s.unique_species"></td>
+            <td class="px-4 py-2.5 text-right text-[10px] font-mono text-muted" x-text="s.last_detection ? new Date(s.last_detection).toLocaleString() : '—'"></td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+    <template x-if="streamStats.length === 0">
+      <div class="p-8 text-center text-sm text-muted">No stream data yet</div>
+    </template>
+  </div>
+
+  <!-- Species list -->
+  <div class="bg-white rounded-xl border border-rule overflow-hidden">
+    <div class="px-5 py-4 border-b border-rule">
+      <h2 class="font-serif text-lg font-semibold">Species Detected</h2>
+    </div>
+    <div class="divide-y divide-rule">
+      <template x-for="sp in speciesData" :key="sp.name">
+        <div class="px-5 py-3 flex items-center justify-between">
+          <div>
+            <span class="text-sm font-medium" x-text="sp.name"></span>
+            <span class="text-xs text-muted ml-2" x-text="'avg ' + (sp.avg_confidence * 100).toFixed(0) + '% confidence'"></span>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="w-32 h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div class="h-full bg-forest-500 rounded-full" :style="'width:' + (sp.count / maxSpeciesCount * 100) + '%'"></div>
+            </div>
+            <span class="text-xs font-mono text-muted w-10 text-right" x-text="sp.count"></span>
+          </div>
+        </div>
+      </template>
+      <template x-if="speciesData.length === 0">
+        <div class="p-8 text-center text-sm text-muted">No species detected yet</div>
+      </template>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const BACKEND = '{{ backend_url }}';
+const PROJECT_ID = '{{ project.id }}';
+const COLORS = ['#2d7d2d','#0d9488','#1565c0','#6a1b9a','#ad1457','#e65100','#3e2723','#263238','#558b2f','#00838f'];
+
+function analyticsPage() {
+  return {
+    range: '7d',
+    summary: {},
+    speciesData: [],
+    streamStats: [],
+    hourlyData: [],
+    timelineChart: null,
+    speciesChart: null,
+    selectedSpecies: null,
+    speciesDetail: null,
+    filteredTimelineChart: null,
+    timeGrid: [],
+    hourlyDistribution: [],
+    hourlyDistChart: null,
+    maxHeatCount: 1,
+
+    get maxSpeciesCount() {
+      return Math.max(1, ...this.speciesData.map(s => s.count));
+    },
+
+    async init() {
+      await this.fetchAll();
+      this.initCharts();
+    },
+
+    async fetchAll() {
+      const r = this.range === 'all' ? '' : this.range;
+      const qs = r ? `?range=${r}` : '';
+      try {
+        const [sum, sp, hr, ss, hm] = await Promise.all([
+          fetch(`${BACKEND}/api/v1/projects/${PROJECT_ID}/analytics/summary${qs}`).then(r => r.json()),
+          fetch(`${BACKEND}/api/v1/projects/${PROJECT_ID}/analytics/species${qs}`).then(r => r.json()),
+          fetch(`${BACKEND}/api/v1/projects/${PROJECT_ID}/analytics/hourly${qs}`).then(r => r.json()),
+          fetch(`${BACKEND}/api/v1/projects/${PROJECT_ID}/analytics/stream_stats${qs}`).then(r => r.json()),
+          fetch(`${BACKEND}/api/v1/projects/${PROJECT_ID}/analytics/heatmap${qs}`).then(r => r.json()),
+        ]);
+        this.summary = sum;
+        this.speciesData = sp.species || [];
+        this.hourlyData = hr.hours || [];
+        this.streamStats = ss.streams || [];
+        this.timeGrid = hm.time_grid || [];
+        this.hourlyDistribution = hm.hourly_distribution || [];
+        this.maxHeatCount = Math.max(1, ...this.timeGrid.map(t => t.count));
+        this.updateCharts();
+        this.updateHourlyDistChart();
+      } catch (e) { console.error(e); }
+    },
+
+    getHeatCount(dow, hour) {
+      const cell = this.timeGrid.find(t => t.dow === dow && t.hour === hour);
+      return cell ? cell.count : 0;
+    },
+
+    getHeatColor(dow, hour) {
+      const count = this.getHeatCount(dow, hour);
+      if (count === 0) return '#f9fafb';
+      const ratio = count / this.maxHeatCount;
+      if (ratio < 0.2) return '#d4f0d4';
+      if (ratio < 0.4) return '#a8e0a8';
+      if (ratio < 0.6) return '#3fa53f';
+      if (ratio < 0.8) return '#236123';
+      return '#0a1f0a';
+    },
+
+    updateHourlyDistChart() {
+      const ctx = document.getElementById('hourlyDistChart');
+      if (!ctx) return;
+      if (this.hourlyDistChart) this.hourlyDistChart.destroy();
+
+      const labels = Array.from({length: 24}, (_, i) => i.toString().padStart(2, '0') + ':00');
+      const data = Array(24).fill(0);
+      this.hourlyDistribution.forEach(h => { data[h.hour] = h.count; });
+
+      this.hourlyDistChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            data,
+            backgroundColor: data.map((v, i) => {
+              const maxVal = Math.max(1, ...data);
+              const ratio = v / maxVal;
+              return `rgba(45, 125, 45, ${0.2 + ratio * 0.8})`;
+            }),
+            borderRadius: 2,
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false }, ticks: { font: { size: 7, family: 'JetBrains Mono' }, maxRotation: 0 } },
+            y: { beginAtZero: true, grid: { color: '#f0f0f0' }, ticks: { stepSize: 1 } }
+          }
+        }
+      });
+    },
+
+    initCharts() {
+      this.timelineChart = new Chart(document.getElementById('timelineChart'), {
+        type: 'bar',
+        data: { labels: [], datasets: [{ label: 'Detections', data: [], backgroundColor: 'rgba(45,125,45,0.6)', borderRadius: 3 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+          scales: { x: { grid: { display: false }, ticks: { font: { size: 9, family: 'JetBrains Mono' }, maxTicksLimit: 16 } },
+                    y: { beginAtZero: true, grid: { color: '#f0f0f0' }, ticks: { stepSize: 1 } } } }
+      });
+      this.speciesChart = new Chart(document.getElementById('speciesChart'), {
+        type: 'doughnut',
+        data: { labels: [], datasets: [{ data: [], backgroundColor: COLORS }] },
+        options: { responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom', labels: { font: { size: 10, family: 'DM Sans' }, boxWidth: 10, padding: 8 } } } }
+      });
+    },
+
+    updateCharts() {
+      if (this.timelineChart && this.hourlyData.length) {
+        this.timelineChart.data.labels = this.hourlyData.map(h => {
+          const d = new Date(h.hour);
+          return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' ' + d.getHours() + 'h';
+        });
+        this.timelineChart.data.datasets[0].data = this.hourlyData.map(h => h.count);
+        this.timelineChart.update();
+      }
+      if (this.speciesChart && this.speciesData.length) {
+        this.speciesChart.data.labels = this.speciesData.map(s => s.name);
+        this.speciesChart.data.datasets[0].data = this.speciesData.map(s => s.count);
+        this.speciesChart.update();
+      }
+    },
+
+    async fetchFiltered() {
+      if (!this.selectedSpecies) return;
+      const r = this.range === 'all' ? '' : this.range;
+      const qs = r ? `?range=${r}` : '';
+      try {
+        const res = await fetch(`${BACKEND}/api/v1/projects/${PROJECT_ID}/analytics/species/${encodeURIComponent(this.selectedSpecies)}${qs}`);
+        this.speciesDetail = await res.json();
+
+        // Build or update filtered timeline chart
+        this.$nextTick(() => {
+          const ctx = document.getElementById('filteredTimelineChart');
+          if (!ctx) return;
+
+          if (this.filteredTimelineChart) {
+            this.filteredTimelineChart.destroy();
+          }
+
+          const hourly = this.speciesDetail.hourly || [];
+          this.filteredTimelineChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+              labels: hourly.map(h => {
+                const d = new Date(h.hour);
+                return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' ' + d.getHours() + 'h';
+              }),
+              datasets: [{
+                label: this.selectedSpecies,
+                data: hourly.map(h => h.count),
+                backgroundColor: 'rgba(45, 125, 45, 0.7)',
+                borderRadius: 3,
+              }]
+            },
+            options: {
+              responsive: true, maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: {
+                x: { grid: { display: false }, ticks: { font: { size: 8, family: 'JetBrains Mono' }, maxTicksLimit: 12 } },
+                y: { beginAtZero: true, grid: { color: '#f0f0f0' }, ticks: { stepSize: 1 } }
+              }
+            }
+          });
+        });
+      } catch (e) { console.error(e); }
+    }
+  }
+}
+</script>
+{% endblock %}

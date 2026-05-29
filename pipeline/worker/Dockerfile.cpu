@@ -1,0 +1,23 @@
+FROM python:3.11-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg curl unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh
+
+RUN useradd -m -r appuser
+
+WORKDIR /app
+
+COPY requirements.cpu.txt requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.cpu.txt
+
+COPY . .
+
+RUN mkdir -p /data/models /data/frames
+RUN chown -R appuser:appuser /app /data
+
+USER appuser
+
+CMD ["python", "main.py"]

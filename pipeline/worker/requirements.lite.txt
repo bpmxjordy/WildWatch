@@ -1,0 +1,6 @@
+psycopg2-binary>=2.9
+sqlalchemy>=2.0
+redis>=5.0
+pillow>=10.0
+python-dotenv>=1.0
+requests>=2.31
