@@ -187,6 +187,11 @@ def create_app():
         streams = requests.get(f"{api}/api/v1/projects/{project_id}/streams", timeout=5).json()
         return render_template("notifications/rules.html", project=project, streams=streams)
 
+    # ── Inference routes ─────────────────────────────
+    @app.route("/inference")
+    def inference():
+        return render_template("inference/upload.html")
+
     # ── Map routes ────────────────────────────────────
     @app.route("/projects/<project_id>/map")
     def project_map(project_id):

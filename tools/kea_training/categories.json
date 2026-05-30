@@ -1,0 +1,394 @@
+[
+  {
+    "name": "empty",
+    "id": 0
+  },
+  {
+    "name": "banded_rail",
+    "id": 1
+  },
+  {
+    "name": "bellbird",
+    "id": 2
+  },
+  {
+    "name": "blackbird",
+    "id": 3
+  },
+  {
+    "name": "cat",
+    "id": 4
+  },
+  {
+    "name": "dog",
+    "id": 5
+  },
+  {
+    "name": "fantail",
+    "id": 6
+  },
+  {
+    "name": "fluttering_shearwater",
+    "id": 7
+  },
+  {
+    "name": "grey_faced_petrol",
+    "id": 8
+  },
+  {
+    "name": "harrier",
+    "id": 9
+  },
+  {
+    "name": "kereru",
+    "id": 10
+  },
+  {
+    "name": "kiwi",
+    "id": 11
+  },
+  {
+    "name": "little_blue_penguin",
+    "id": 12
+  },
+  {
+    "name": "morepork",
+    "id": 13
+  },
+  {
+    "name": "mouse",
+    "id": 14
+  },
+  {
+    "name": "myna",
+    "id": 15
+  },
+  {
+    "name": "oystercatcher",
+    "id": 16
+  },
+  {
+    "name": "paradise_duck",
+    "id": 17
+  },
+  {
+    "name": "pateke",
+    "id": 18
+  },
+  {
+    "name": "pheasant",
+    "id": 19
+  },
+  {
+    "name": "possum",
+    "id": 20
+  },
+  {
+    "name": "pukeko",
+    "id": 21
+  },
+  {
+    "name": "quail_brown",
+    "id": 22
+  },
+  {
+    "name": "quail_california",
+    "id": 23
+  },
+  {
+    "name": "rabbit",
+    "id": 24
+  },
+  {
+    "name": "rat",
+    "id": 25
+  },
+  {
+    "name": "robin",
+    "id": 26
+  },
+  {
+    "name": "rosella",
+    "id": 27
+  },
+  {
+    "name": "stoat",
+    "id": 28
+  },
+  {
+    "name": "swan",
+    "id": 29
+  },
+  {
+    "name": "takahe",
+    "id": 30
+  },
+  {
+    "name": "thrush",
+    "id": 31
+  },
+  {
+    "name": "tieke",
+    "id": 32
+  },
+  {
+    "name": "tui",
+    "id": 33
+  },
+  {
+    "name": "weasel",
+    "id": 34
+  },
+  {
+    "name": "white_faced_heron",
+    "id": 35
+  },
+  {
+    "name": "whitehead",
+    "id": 36
+  },
+  {
+    "name": "chaffinch",
+    "id": 37
+  },
+  {
+    "name": "deer",
+    "id": 38
+  },
+  {
+    "name": "dunnock",
+    "id": 39
+  },
+  {
+    "name": "greenfinch",
+    "id": 40
+  },
+  {
+    "name": "hare",
+    "id": 41
+  },
+  {
+    "name": "kea",
+    "id": 42
+  },
+  {
+    "name": "redpoll",
+    "id": 43
+  },
+  {
+    "name": "rifleman",
+    "id": 44
+  },
+  {
+    "name": "silvereye",
+    "id": 45
+  },
+  {
+    "name": "tahr",
+    "id": 46
+  },
+  {
+    "name": "tomtit",
+    "id": 47
+  },
+  {
+    "name": "yellowhammer",
+    "id": 48
+  },
+  {
+    "name": "parakeet",
+    "id": 49
+  },
+  {
+    "name": "pig",
+    "id": 50
+  },
+  {
+    "name": "pipit",
+    "id": 51
+  },
+  {
+    "name": "sealion",
+    "id": 52
+  },
+  {
+    "name": "yellow_eyed_penguin",
+    "id": 53
+  },
+  {
+    "name": "goat",
+    "id": 54
+  },
+  {
+    "name": "hedgehog",
+    "id": 55
+  },
+  {
+    "name": "sheep",
+    "id": 56
+  },
+  {
+    "name": "nz_falcon",
+    "id": 57
+  },
+  {
+    "name": "weka",
+    "id": 58
+  },
+  {
+    "name": "kingfisher",
+    "id": 59
+  },
+  {
+    "name": "banded_dotterel",
+    "id": 60
+  },
+  {
+    "name": "ferret",
+    "id": 61
+  },
+  {
+    "name": "magpie",
+    "id": 62
+  },
+  {
+    "name": "moth",
+    "id": 63
+  },
+  {
+    "name": "plover",
+    "id": 64
+  },
+  {
+    "name": "brown_creeper",
+    "id": 65
+  },
+  {
+    "name": "canada_goose",
+    "id": 66
+  },
+  {
+    "name": "goldfinch",
+    "id": 67
+  },
+  {
+    "name": "grey_warbler",
+    "id": 68
+  },
+  {
+    "name": "kaka",
+    "id": 69
+  },
+  {
+    "name": "lizard",
+    "id": 70
+  },
+  {
+    "name": "starling",
+    "id": 71
+  },
+  {
+    "name": "chamois",
+    "id": 72
+  },
+  {
+    "name": "cow",
+    "id": 73
+  },
+  {
+    "name": "grey_duck",
+    "id": 74
+  },
+  {
+    "name": "long_tailed_cuckoo",
+    "id": 75
+  },
+  {
+    "name": "mohua",
+    "id": 76
+  },
+  {
+    "name": "shag",
+    "id": 77
+  },
+  {
+    "name": "skink",
+    "id": 78
+  },
+  {
+    "name": "sparrow",
+    "id": 79
+  },
+  {
+    "name": "spurwing_plover",
+    "id": 80
+  },
+  {
+    "name": "chicken",
+    "id": 81
+  },
+  {
+    "name": "horse",
+    "id": 82
+  },
+  {
+    "name": "white_tailed_deer",
+    "id": 83
+  },
+  {
+    "name": "human",
+    "id": 84
+  },
+  {
+    "name": "wallaby",
+    "id": 85
+  },
+  {
+    "name": "black_backed_gull",
+    "id": 86
+  },
+  {
+    "name": "mallard",
+    "id": 87
+  },
+  {
+    "name": "black_fronted_tern",
+    "id": 88
+  },
+  {
+    "name": "stilt",
+    "id": 89
+  },
+  {
+    "name": "wrybill",
+    "id": 90
+  },
+  {
+    "name": "swallow",
+    "id": 91
+  },
+  {
+    "name": "fernbird",
+    "id": 92
+  },
+  {
+    "name": "fiordland_crested_penguin",
+    "id": 93
+  },
+  {
+    "name": "crake",
+    "id": 94
+  },
+  {
+    "name": "shore_plover",
+    "id": 95
+  },
+  {
+    "name": "spotted_dove",
+    "id": 96
+  },
+  {
+    "name": "black_billed_gull",
+    "id": 97
+  }
+]

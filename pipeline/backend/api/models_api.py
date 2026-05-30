@@ -81,6 +81,12 @@ def upload_model(project_id):
     return jsonify(model.to_dict()), 201
 
 
+@models_bp.route("/models", methods=["GET"])
+def list_all_models():
+    models = MLModel.query.order_by(MLModel.uploaded_at.desc()).all()
+    return jsonify([m.to_dict() for m in models])
+
+
 @models_bp.route("/models/<uuid:model_id>", methods=["GET"])
 def get_model(model_id):
     model = db.session.get(MLModel, model_id)

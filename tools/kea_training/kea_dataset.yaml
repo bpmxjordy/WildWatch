@@ -1,0 +1,6 @@
+path: D:/AI/WildWatch/tools/kea_training/dataset
+train: train/images
+val: val/images
+
+names:
+  0: kea

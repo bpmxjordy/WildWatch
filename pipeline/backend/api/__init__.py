@@ -11,6 +11,7 @@ def register_blueprints(app: Flask):
     from api.analytics import analytics_bp
     from api.gpu import gpu_bp
     from api.export import export_bp
+    from api.inference import inference_bp
 
     app.register_blueprint(health_bp)
     app.register_blueprint(projects_bp)
@@ -21,3 +22,4 @@ def register_blueprints(app: Flask):
     app.register_blueprint(analytics_bp)
     app.register_blueprint(gpu_bp)
     app.register_blueprint(export_bp)
+    app.register_blueprint(inference_bp)
