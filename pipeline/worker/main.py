@@ -14,6 +14,7 @@ from gpu_monitor import detect_gpus
 from inference import ModelPool
 from pipeline import fetch_active_streams, process_batch
 from scheduler import Scheduler
+from inference_jobs import start_inference_listener
 
 logging.basicConfig(
     level=logging.INFO,
@@ -93,6 +94,10 @@ async def main():
 
     with Session(engine) as session:
         register_gpus(session)
+
+    # Start inference job listener if Redis is available
+    if redis_client:
+        start_inference_listener(redis_client, model_pool)
 
     logger.info("WildSight worker started — waiting for running projects...")
 

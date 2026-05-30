@@ -1,13 +1,17 @@
-"""Single-image inference endpoint — upload an image and get detections."""
+"""Single-image inference endpoint — upload an image, route to worker via Redis."""
+import json
 import os
 import uuid
 
 from flask import Blueprint, jsonify, request, current_app
 
-from extensions import db
+from extensions import db, redis_client
 from models.ml_model import MLModel
 
 inference_bp = Blueprint("inference", __name__, url_prefix="/api/v1")
+
+INFERENCE_REQUEST_QUEUE = "inference:requests"
+INFERENCE_TIMEOUT = 60  # seconds to wait for worker result
 
 
 @inference_bp.route("/inference", methods=["POST"])
@@ -24,17 +28,63 @@ def run_inference():
     if not model:
         return jsonify({"error": "Model not found"}), 404
 
-    # Save uploaded image temporarily
+    if not redis_client:
+        return jsonify({"error": "Redis not available — cannot reach worker"}), 503
+
+    # Save uploaded image to shared volume
     upload_dir = os.path.join(current_app.config["FRAMES_DIR"], "uploads")
     os.makedirs(upload_dir, exist_ok=True)
     filename = f"{uuid.uuid4()}.jpg"
     filepath = os.path.join(upload_dir, filename)
     file.save(filepath)
 
+    # Create inference job
+    job_id = str(uuid.uuid4())
+    job = {
+        "job_id": job_id,
+        "model_id": str(model.id),
+        "framework": model.framework,
+        "model_path": model.storage_path,
+        "image_path": filepath,
+    }
+
+    # Push job to Redis queue
+    redis_client.rpush(INFERENCE_REQUEST_QUEUE, json.dumps(job))
+
+    # Wait for result from worker
+    response_key = f"inference:result:{job_id}"
+    channel = f"inference:done:{job_id}"
+
+    pubsub = redis_client.pubsub()
+    pubsub.subscribe(channel)
+
     try:
-        detections = _run_model(model, filepath)
-    except Exception as e:
-        return jsonify({"error": f"Inference failed: {e}"}), 500
+        import time
+        deadline = time.time() + INFERENCE_TIMEOUT
+        while time.time() < deadline:
+            # Check if result already arrived
+            if redis_client.exists(response_key):
+                break
+            msg = pubsub.get_message(timeout=2.0)
+            if msg and msg["type"] == "message":
+                break
+        else:
+            return jsonify({"error": "Inference timed out — worker may be busy"}), 504
+    finally:
+        pubsub.unsubscribe(channel)
+        pubsub.close()
+
+    raw = redis_client.get(response_key)
+    if not raw:
+        return jsonify({"error": "No result from worker"}), 504
+
+    result = json.loads(raw)
+    redis_client.delete(response_key)
+
+    if "error" in result:
+        return jsonify({"error": result["error"]}), 500
+
+    detections = result.get("detections", [])
 
     # Generate annotated image
     annotated_filename = f"{uuid.uuid4()}_annotated.jpg"
@@ -80,66 +130,3 @@ def run_inference():
         "annotated_url": f"/frames/uploads/{annotated_filename}",
         "model": model.to_dict(),
     })
-
-
-def _run_model(model, image_path: str) -> list[dict]:
-    framework = model.framework
-    storage_path = model.storage_path
-
-    if framework == "speciesnet":
-        from speciesnet import SpeciesNet
-        sn = SpeciesNet("kaggle:google/speciesnet/pyTorch/v4.0.2a/1", components="all")
-        result = sn.predict(filepaths=[image_path], run_mode="single_thread", progress_bars=False)
-        predictions = result.get("predictions", [])
-        if not predictions:
-            return []
-        pred = predictions[0]
-        label = pred.get("prediction", "")
-        score = pred.get("prediction_score", 0)
-        parts = [p.strip() for p in label.split(";") if p.strip()]
-        if not parts or parts[0].lower() in ("blank", "person", "vehicle"):
-            return []
-        common_name = " ".join(w.capitalize() for w in parts[-1].split())
-        dets = pred.get("detections", [])
-        results = []
-        for det in dets:
-            if det.get("label") != "animal":
-                continue
-            bbox = det.get("bbox")
-            if bbox:
-                x, y, w, h = bbox
-                results.append({
-                    "class_name": common_name,
-                    "confidence": det.get("conf", score),
-                    "bbox": {"x1": x, "y1": y, "x2": x + w, "y2": y + h},
-                })
-        if not results and score > 0.3:
-            results.append({
-                "class_name": common_name,
-                "confidence": score,
-                "bbox": {"x1": 0, "y1": 0, "x2": 1, "y2": 1},
-            })
-        return results
-
-    elif framework in ("yolov5", "yolov8", "yolov10"):
-        from ultralytics import YOLO
-        yolo = YOLO(storage_path)
-        results = yolo(image_path, verbose=False)
-        names = yolo.names
-        if isinstance(names, dict):
-            names = list(names.values())
-        detections = []
-        for r in results:
-            for box in r.boxes:
-                cls_id = int(box.cls[0])
-                conf = float(box.conf[0])
-                x1, y1, x2, y2 = box.xyxyn[0].tolist()
-                detections.append({
-                    "class_name": names[cls_id] if cls_id < len(names) else str(cls_id),
-                    "confidence": conf,
-                    "bbox": {"x1": x1, "y1": y1, "x2": x2, "y2": y2},
-                })
-        return detections
-
-    else:
-        return [{"class_name": "unsupported_framework", "confidence": 0, "bbox": None}]

@@ -12,5 +12,6 @@ redis>=5.0
 eventlet>=0.36
 gunicorn>=22.0
 python-dotenv>=1.0
+Pillow>=10.0
 weasyprint>=62.0
 matplotlib>=3.8
