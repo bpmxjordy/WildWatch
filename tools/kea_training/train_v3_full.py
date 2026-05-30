@@ -14,11 +14,13 @@ Usage:
 """
 
 import argparse
+import io
 import json
 import random
 import shutil
 import sys
 import urllib.request
+import zipfile
 from pathlib import Path
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -32,11 +34,35 @@ DATASET_DIR = BASE_DIR / "dataset_v3"
 DATASET_YAML = BASE_DIR / "kea_dataset_v3.yaml"
 
 NZ_IMAGE_BASE = "https://storage.googleapis.com/public-datasets-lila/nz-trailcams"
+METADATA_URL = "https://storage.googleapis.com/public-datasets-lila/nz-trailcams/trail_camera_images_of_new_zealand_animals_1.00.json.zip"
 
 KEA_CATEGORY_ID = 42
 CONFIDENCE_THRESHOLD = 0.3
 TRAIN_SPLIT = 0.85
 NUM_NEGATIVE_ANIMALS = 2000
+
+
+# ---------------------------------------------------------------------------
+# Step 0: Ensure metadata exists
+# ---------------------------------------------------------------------------
+
+def ensure_metadata():
+    """Download the NZ Trail Cams metadata if not present."""
+    if METADATA_FILE.exists():
+        return
+
+    print(f"\n{'='*60}")
+    print("Downloading NZ Trail Cams metadata...")
+    print(f"{'='*60}\n")
+
+    BASE_DIR.mkdir(parents=True, exist_ok=True)
+    data = urllib.request.urlopen(METADATA_URL).read()
+    z = zipfile.ZipFile(io.BytesIO(data))
+    json_name = [n for n in z.namelist() if n.endswith(".json")][0]
+    raw = z.read(json_name)
+    with open(METADATA_FILE, "wb") as f:
+        f.write(raw)
+    print(f"  Saved metadata ({len(raw) / 1e6:.1f} MB)")
 
 
 # ---------------------------------------------------------------------------
@@ -424,6 +450,8 @@ def main():
         help="Pipeline step to run",
     )
     args = parser.parse_args()
+
+    ensure_metadata()
 
     if args.step in ("download", "all"):
         download_all_kea()
