@@ -1,6 +1,7 @@
 # Training images (too large for git)
 kea_training/dataset/
 kea_training/dataset_v2/
+kea_training/dataset_v3/
 kea_training/images/
 
 # Test video frames
