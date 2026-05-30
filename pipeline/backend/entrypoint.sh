@@ -2,13 +2,21 @@
 set -e
 
 echo "Running database migrations..."
-flask db upgrade 2>/dev/null || python -c "
+python -c "
 from app import create_app
 from extensions import db
+# Import all models so SQLAlchemy knows about them
+from models.project import Project
+from models.stream import Stream
+from models.ml_model import MLModel
+from models.detection import Detection
+from models.notification import NotificationRule
+from models.gpu import GPUDevice
+
 app = create_app()
 with app.app_context():
     db.create_all()
-    print('Tables created via db.create_all()')
+    print('All tables created successfully')
 "
 
 echo "Registering built-in models..."
