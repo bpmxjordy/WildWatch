@@ -147,27 +147,70 @@ Three model versions were trained iteratively, each addressing limitations disco
 - **On out-of-domain footage (YouTube video)**, the model showed lower confidence scores compared to v1, causing some true detections to fall below the inference threshold (conf=0.25). This is a confidence calibration effect — the model is more discriminating, not less capable
 - The larger architecture (medium vs nano) did not fully compensate for the limited training data (5,000 images)
 
-### v3 — Full Dataset (YOLOv11m) *[In Training]*
+### v3 — Full Dataset (YOLOv11m)
 
 | Parameter | Value |
 |---|---|
 | **Architecture** | YOLOv11m (medium) — 20.1M parameters |
 | **Base weights** | `yolo11m.pt` (COCO pretrained) |
-| **Training images** | 54,790 kea (full dataset) |
+| **Training images** | ~43,144 kea (from full 54,790 after MegaDetector filtering and train split) |
 | **Negative images** | 2,000 non-kea animals from same NZ Trail Cams dataset |
 | **MegaDetector threshold** | 0.3 |
 | **Train/Val split** | 85% / 15% |
-| **Epochs** | 150 |
+| **Epochs** | 150 (ran full, no early stopping triggered) |
 | **Image size** | 640px |
 | **Batch size** | 8 |
 | **Patience** | 30 (early stopping) |
-| **Hardware** | Remote training machine |
+| **Total training time** | 59.7 hours |
+| **Hardware** | Remote training machine (NVIDIA GPU, CUDA) |
+| **Model file size** | 40.5 MB (best.pt) |
 
-#### v3 Rationale
+#### v3 Results (Best Epoch: 130)
 
-- Using the full 54,790 kea images (11x more than v1/v2) provides the model with far greater variety in poses, lighting conditions, camera angles, and environmental contexts
-- Training for 150 epochs (vs 100) allows the model more time to converge on the larger dataset
-- Expected improvements: higher confidence on true detections across both in-domain (trail cam) and out-of-domain (video) imagery
+| Metric | Value | vs v2 | vs v1 |
+|---|---|---|---|
+| Precision | 0.986 | +0.021 | +0.009 |
+| Recall | 0.983 | +0.023 | +0.018 |
+| mAP@50 | 0.993 | +0.015 | +0.010 |
+| mAP@50-95 | 0.945 | +0.043 | +0.062 |
+| Train box_loss | 0.372 | — | — |
+| Val box_loss | 0.282 | -0.083 | -0.211 |
+| Val cls_loss | 0.205 | — | — |
+
+#### v3 Final Epoch (150) Metrics
+
+| Metric | Value |
+|---|---|
+| Precision | 0.986 |
+| Recall | 0.982 |
+| mAP@50 | 0.993 |
+| mAP@50-95 | 0.943 |
+| Train box_loss | 0.227 |
+| Val box_loss | 0.280 |
+
+#### v3 Observations
+
+- **Significant improvement across all metrics** compared to v1 and v2, most notably mAP@50-95 rising from 0.883 (v1) → 0.902 (v2) → **0.945** (v3), a 6.2 percentage point improvement over baseline
+- The model trained for the full 150 epochs without early stopping triggering (patience=30), indicating continued learning throughout — best weights were saved at epoch 130
+- Minimal gap between best (epoch 130) and final (epoch 150) metrics, confirming stability and no overfitting
+- Val box_loss (0.282) is significantly lower than v1 (0.493) and v2 (0.365), demonstrating much tighter bounding box predictions
+- The 11x increase in training data (5,000 → ~43,000 images) was the dominant factor in improvement, providing the model with far greater variety in poses, lighting, camera angles, and environmental contexts
+- Total training time of 59.7 hours reflects the larger dataset and 150 epoch schedule
+
+#### v3 Comparison Summary
+
+| Metric | v1 (nano, 5K) | v2 (medium, 5K+neg) | v3 (medium, 43K+neg) |
+|---|---|---|---|
+| **Architecture** | YOLOv11n (2.6M) | YOLOv11m (20.1M) | YOLOv11m (20.1M) |
+| **Training images** | 4,053 | ~5,754 | ~43,144 |
+| **Negative images** | 0 | 2,000 | 2,000 |
+| **Epochs** | 100 | 100 | 150 |
+| **Precision** | 0.977 | 0.965 | **0.986** |
+| **Recall** | 0.965 | 0.960 | **0.983** |
+| **mAP@50** | 0.983 | 0.978 | **0.993** |
+| **mAP@50-95** | 0.883 | 0.902 | **0.945** |
+| **Val box_loss** | 0.493 | 0.365 | **0.282** |
+| **False positives** | High (no negatives) | 42 on val | Lowest |
 
 ---
 
@@ -289,8 +332,12 @@ tools/kea_training/
 │   ├── kea_detector_v2/       # v2 model outputs
 │   │   ├── weights/best.pt    # Best v2 model weights
 │   │   └── ...
-│   └── kea_detector_v3/       # v3 model outputs (when complete)
-│       └── weights/best.pt
+│   └── kea_detector_v3/       # v3 model outputs
+│       ├── weights/best.pt    # Best v3 model weights (40.5 MB)
+│       ├── results.csv        # Per-epoch metrics (150 epochs)
+│       ├── results.png        # Training curves
+│       ├── confusion_matrix.png
+│       └── ...
 ├── images/                    # (gitignored) Downloaded images
 │   ├── kea/                   # Kea positive images
 │   └── negatives/             # Non-kea negative images
