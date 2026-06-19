@@ -6,6 +6,8 @@ import logging
 import os
 import threading
 
+import redis.exceptions as redis_exc
+
 from inference.model_pool import ModelPool
 from inference.base import DetectionResult
 
@@ -55,8 +57,8 @@ def start_inference_listener(redis_client, model_pool: ModelPool):
         logger.info("Inference job listener started")
         while True:
             try:
-                # BLPOP blocks until a job arrives (timeout 5s then retry)
-                result = redis_client.blpop(INFERENCE_REQUEST_QUEUE, timeout=5)
+                # BLPOP blocks until a job arrives (timeout then retry)
+                result = redis_client.blpop(INFERENCE_REQUEST_QUEUE, timeout=2)
                 if result is None:
                     continue
 
@@ -73,6 +75,9 @@ def start_inference_listener(redis_client, model_pool: ModelPool):
                 # Notify the backend that the result is ready
                 redis_client.publish(f"inference:done:{job_id}", "done")
 
+            except (redis_exc.TimeoutError, redis_exc.ConnectionError):
+                # BLPOP timed out at the socket layer with no job — expected, just retry
+                continue
             except Exception:
                 logger.exception("Error in inference listener")
 
