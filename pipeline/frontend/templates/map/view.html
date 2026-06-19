@@ -352,18 +352,26 @@ function mapPage() {
       });
     },
 
-    drawHeatmap(countsMap) {
+    drawHeatmap(weightedCounts) {
       if (this.heatLayer) {
         this.map.removeLayer(this.heatLayer);
         this.heatLayer = null;
       }
       const heatPoints = this.streamsWithCoords
-        .map(s => [s.latitude, s.longitude, countsMap[s.id] || 0])
+        .map(s => [s.latitude, s.longitude, weightedCounts[s.id] || 0])
         .filter(p => p[2] > 0);
       if (heatPoints.length === 0) return;
+
+      // Normalize against the actual max so we don't oversaturate when zoomed out.
+      const maxVal = Math.max(...heatPoints.map(p => p[2]), 1);
+
       this.heatLayer = L.heatLayer(heatPoints, {
-        radius: 45, blur: 32, maxZoom: 12, minOpacity: 0.35,
-        gradient: { 0.1: '#0a2f1f', 0.3: '#166534', 0.5: '#22c55e', 0.7: '#fbbf24', 0.9: '#ef4444', 1.0: '#ff2222' },
+        radius: 22,
+        blur: 18,
+        max: maxVal,
+        maxZoom: 10,
+        minOpacity: 0.25,
+        gradient: { 0.2: '#166534', 0.45: '#22c55e', 0.7: '#fbbf24', 0.9: '#ef4444', 1.0: '#ff2222' },
       });
       if (this.showHeatmap) this.heatLayer.addTo(this.map);
     },
@@ -395,10 +403,28 @@ function mapPage() {
       return out;
     },
 
+    // Exponentially-weighted counts: recent buckets count strongest, older ones fade out.
+    // tau is chosen so weight drops to ~5% at 20% of the timeframe past the cursor.
+    weightedCountsAt(index) {
+      const out = {};
+      if (this.buckets.length === 0) return out;
+      // tau = total_buckets / 15  →  exp(-0.2 * 15) ≈ 0.05 at 20% past
+      const tau = Math.max(this.buckets.length / 15, 1);
+      for (let i = 0; i <= index && i < this.buckets.length; i++) {
+        const weight = Math.exp((i - index) / tau);
+        Object.entries(this.buckets[i].counts).forEach(([sid, c]) => {
+          out[sid] = (out[sid] || 0) + c * weight;
+        });
+      }
+      return out;
+    },
+
     updateMapForBucket() {
+      // Markers show the cumulative absolute count (so popup totals stay meaningful)
       const counts = this.cumulativeCountsAt(this.currentIndex);
       this.drawMarkers(counts);
-      this.drawHeatmap(counts);
+      // Heatmap uses the decayed weighting so old activity fades out
+      this.drawHeatmap(this.weightedCountsAt(this.currentIndex));
     },
 
     bucketTotal(b) {

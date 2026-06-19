@@ -299,11 +299,11 @@ def map_timeline(project_id):
     if not stream_ids:
         return jsonify({"buckets": [], "streams": [], "species": []})
 
-    # Build trunc expression
+    # Build trunc expression — avoid % operator (psycopg2 paramstyle eats it)
     trunc_exprs = {
         "hour": "date_trunc('hour', detected_at)",
         "6h": "date_trunc('hour', detected_at) - "
-              "((EXTRACT(hour FROM detected_at)::int %% 6) * interval '1 hour')",
+              "(mod(EXTRACT(hour FROM detected_at)::int, 6) * interval '1 hour')",
         "day": "date_trunc('day', detected_at)",
     }
     trunc_expr = trunc_exprs[bucket_kind]
