@@ -23,6 +23,9 @@ kea_training/megadetector_results_full.json
 # Checkpoint weights (only keep best.pt)
 kea_training/**/last.pt
 
+# Active training script (user edits frequently)
+kea_training/train_v3_full.py
+
 # Cache files
 kea_training/**/*.cache
 __pycache__/

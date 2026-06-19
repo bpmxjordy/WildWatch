@@ -3,9 +3,21 @@
 
 {% block head %}
 <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
 <style>
-  .leaflet-popup-content { min-width: 200px; }
-  .cam-popup-thumb { width: 100%; height: 120px; object-fit: cover; border-radius: 6px; margin-bottom: 8px; background: #f3f4f6; }
+  .leaflet-popup-content { min-width: 220px; margin: 10px 12px; }
+  .cam-popup-thumb { width: 100%; height: 130px; object-fit: cover; border-radius: 6px; margin-bottom: 8px; background: #1f2937; }
+  .marker-cluster-small { background: rgba(74, 222, 128, 0.4); }
+  .marker-cluster-small div { background: rgba(34, 197, 94, 0.85); color: #fff; }
+  .marker-cluster-medium { background: rgba(251, 191, 36, 0.4); }
+  .marker-cluster-medium div { background: rgba(245, 158, 11, 0.9); color: #fff; }
+  .marker-cluster-large { background: rgba(239, 68, 68, 0.4); }
+  .marker-cluster-large div { background: rgba(220, 38, 38, 0.9); color: #fff; }
+  .map-control-card { background: rgba(255,255,255,0.96); backdrop-filter: blur(6px); }
+  .timeline-bar { background: linear-gradient(to right, #fef3c7, #fbbf24, #ef4444); }
+  [x-cloak] { display: none !important; }
 </style>
 {% endblock %}
 
@@ -18,38 +30,158 @@
     Back to Project
   </a>
 
-  <div class="flex items-center justify-between mb-4">
-    <h1 class="font-serif text-2xl font-bold tracking-tight">Camera Map</h1>
-    <div class="flex items-center gap-4">
-      <!-- Layer toggles -->
-      <div class="flex items-center gap-2 bg-white border border-rule rounded-lg p-0.5">
-        <button @click="toggleMarkers()" class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
-                :class="showMarkers ? 'bg-forest-600 text-white' : 'text-muted hover:bg-gray-100'">Markers</button>
-        <button @click="toggleHeatmap()" class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
-                :class="showHeatmap ? 'bg-red-500 text-white' : 'text-muted hover:bg-gray-100'">Heatmap</button>
+  <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+    <div>
+      <h1 class="font-serif text-3xl font-bold tracking-tight">Camera Map</h1>
+      <p class="text-muted text-sm mt-1" x-text="streamsWithCoords.length + ' geolocated cameras · ' + totalDetections + ' detections'"></p>
+    </div>
+    <div class="flex items-center gap-2 flex-wrap">
+      <!-- Range selector -->
+      <div class="flex items-center gap-1 bg-white border border-rule rounded-lg p-0.5">
+        <template x-for="r in ['24h','7d','30d']" :key="r">
+          <button @click="setRange(r)" :class="range === r ? 'bg-forest-600 text-white' : 'text-muted hover:bg-gray-100'"
+                  class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors" x-text="r"></button>
+        </template>
       </div>
-      <!-- Legend -->
-      <div class="flex items-center gap-3 text-xs">
-        <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-green-400"></span> Running</span>
-        <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> Idle</span>
-        <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-red-400"></span> Offline</span>
+
+      <!-- Layer toggles -->
+      <div class="flex items-center gap-1 bg-white border border-rule rounded-lg p-0.5">
+        <button @click="toggleMarkers()" :class="showMarkers ? 'bg-forest-600 text-white' : 'text-muted hover:bg-gray-100'"
+                class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors">Markers</button>
+        <button @click="toggleHeatmap()" :class="showHeatmap ? 'bg-red-500 text-white' : 'text-muted hover:bg-gray-100'"
+                class="px-2.5 py-1 rounded-md text-xs font-medium transition-colors">Heat</button>
+      </div>
+
+      <!-- Base layer -->
+      <select x-model="baseLayer" @change="changeBase()"
+              class="bg-white border border-rule rounded-lg px-2 py-1 text-xs font-medium text-muted hover:text-ink focus:outline-none focus:ring-2 focus:ring-forest-300">
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+        <option value="terrain">Terrain</option>
+        <option value="satellite">Satellite</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Species filter pills -->
+  <div class="bg-white rounded-xl border border-rule p-3 mb-3 flex items-center gap-2 flex-wrap" x-show="speciesList.length > 0">
+    <span class="text-[10px] font-mono uppercase tracking-wider text-muted mr-1">Species</span>
+    <button @click="selectedSpecies = []; reloadData()"
+            :class="selectedSpecies.length === 0 ? 'bg-forest-600 text-white' : 'bg-gray-100 text-muted hover:bg-gray-200'"
+            class="px-2.5 py-1 rounded-full text-xs font-medium transition-colors">
+      All <span class="opacity-75" x-text="'(' + speciesList.reduce((a,s) => a + s.count, 0) + ')'"></span>
+    </button>
+    <template x-for="sp in speciesList.slice(0, 12)" :key="sp.name">
+      <button @click="toggleSpecies(sp.name)"
+              :class="selectedSpecies.includes(sp.name) ? 'bg-forest-600 text-white' : 'bg-gray-100 text-muted hover:bg-gray-200'"
+              class="px-2.5 py-1 rounded-full text-xs font-medium transition-colors">
+        <span x-text="sp.name"></span>
+        <span class="opacity-75" x-text="'(' + sp.count + ')'"></span>
+      </button>
+    </template>
+  </div>
+
+  <!-- Map with overlay controls -->
+  <div class="relative">
+    <div id="project-map" class="h-[640px] rounded-xl border border-rule z-0 overflow-hidden"></div>
+
+    <!-- Camera search overlay (top-left) -->
+    <div class="absolute top-3 left-3 z-[400] map-control-card border border-rule rounded-lg shadow-md w-64">
+      <div class="flex items-center px-2 py-1.5">
+        <svg class="w-4 h-4 text-muted mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        <input type="text" x-model="searchQuery" placeholder="Search cameras..."
+               class="flex-1 text-sm bg-transparent outline-none placeholder-muted">
+      </div>
+      <div x-show="searchQuery" class="border-t border-rule max-h-60 overflow-y-auto">
+        <template x-for="s in filteredStreams" :key="s.id">
+          <button @click="flyTo(s)" class="w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-rule last:border-b-0">
+            <p class="text-sm font-medium" x-text="s.name"></p>
+            <p class="text-[10px] text-muted truncate" x-text="s.location_name || (s.lat.toFixed(2) + ', ' + s.lng.toFixed(2))"></p>
+          </button>
+        </template>
+        <p x-show="filteredStreams.length === 0" class="px-3 py-3 text-xs text-muted text-center">No match</p>
+      </div>
+    </div>
+
+    <!-- Status legend (top-right under leaflet controls) -->
+    <div class="absolute top-3 right-14 z-[400] map-control-card border border-rule rounded-lg shadow-md px-3 py-2">
+      <div class="flex items-center gap-3 text-[11px]">
+        <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-green-400 shadow-md shadow-green-400/50"></span> Running</span>
+        <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-md shadow-amber-400/50"></span> Idle</span>
+        <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-red-400 shadow-md shadow-red-400/50"></span> Offline</span>
       </div>
     </div>
   </div>
 
-  <div id="project-map" class="h-[600px] rounded-xl border border-rule z-0"></div>
-
-  <!-- Activity summary below map -->
-  <div class="mt-4 grid sm:grid-cols-3 gap-3" x-show="heatmapData.points.length > 0">
-    <template x-for="pt in heatmapData.points.sort((a,b) => b.count - a.count).slice(0, 6)" :key="pt.stream_id">
-      <div class="bg-white rounded-xl border border-rule p-3 flex items-center justify-between">
-        <div>
-          <p class="text-sm font-medium" x-text="pt.name"></p>
-          <p class="text-[10px] text-muted font-mono" x-text="pt.lat.toFixed(2) + ', ' + pt.lng.toFixed(2)"></p>
+  <!-- Timeline scrubber -->
+  <div class="bg-white rounded-xl border border-rule p-4 mt-3" x-show="buckets.length > 0">
+    <div class="flex items-center justify-between mb-2">
+      <div class="flex items-center gap-2">
+        <button @click="togglePlay()"
+                class="w-9 h-9 rounded-full bg-forest-600 hover:bg-forest-700 text-white flex items-center justify-center transition-colors shadow-sm">
+          <svg x-show="!playing" class="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          <svg x-show="playing" class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>
+        </button>
+        <button @click="reset()" class="text-xs text-muted hover:text-ink transition-colors px-2">Reset</button>
+        <div class="text-xs font-mono text-muted">
+          <span x-text="currentBucketLabel"></span>
+          <span class="mx-1">·</span>
+          <span x-text="currentBucketCount + ' detections'"></span>
         </div>
-        <div class="text-right">
-          <p class="text-lg font-bold text-forest-700" x-text="pt.count"></p>
-          <p class="text-[10px] text-muted">detections</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <label class="text-[10px] font-mono uppercase tracking-wider text-muted">Speed</label>
+        <select x-model.number="playbackSpeed"
+                class="bg-white border border-rule rounded px-2 py-0.5 text-xs">
+          <option :value="800">0.5×</option>
+          <option :value="400">1×</option>
+          <option :value="200">2×</option>
+          <option :value="100">4×</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Timeline visualisation bar -->
+    <div class="relative h-12 bg-gray-50 rounded-md overflow-hidden">
+      <div class="absolute inset-0 flex items-end">
+        <template x-for="(b, i) in buckets" :key="i">
+          <div class="flex-1 transition-colors cursor-pointer hover:opacity-100"
+               :style="`height: ${barHeight(b)}%; background: ${barColor(i)}; opacity: ${i === currentIndex ? 1 : 0.55}`"
+               @click="seekTo(i)"
+               :title="formatBucket(b.t) + ' — ' + bucketTotal(b) + ' detections'"></div>
+        </template>
+      </div>
+      <!-- Playhead -->
+      <div class="absolute top-0 bottom-0 w-0.5 bg-forest-700 pointer-events-none transition-all"
+           :style="`left: ${(currentIndex / Math.max(buckets.length - 1, 1)) * 100}%`"></div>
+    </div>
+
+    <!-- Range labels -->
+    <div class="flex justify-between text-[10px] font-mono text-muted mt-1">
+      <span x-text="buckets.length > 0 ? formatBucket(buckets[0].t) : ''"></span>
+      <span x-text="buckets.length > 0 ? formatBucket(buckets[buckets.length-1].t) : ''"></span>
+    </div>
+
+    <input type="range" min="0" :max="Math.max(buckets.length - 1, 0)" x-model.number="currentIndex"
+           @input="updateMapForBucket()" class="w-full mt-2 accent-forest-600">
+  </div>
+
+  <!-- Top cameras summary -->
+  <div class="mt-4 grid sm:grid-cols-3 lg:grid-cols-4 gap-3" x-show="topCameras.length > 0">
+    <template x-for="cam in topCameras" :key="cam.id">
+      <div class="bg-white rounded-xl border border-rule p-3 hover:shadow-md transition-shadow cursor-pointer"
+           @click="flyTo(cam)">
+        <div class="flex items-center justify-between">
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-medium truncate" x-text="cam.name"></p>
+            <p class="text-[10px] text-muted truncate" x-text="cam.location_name || ''"></p>
+          </div>
+          <div class="text-right ml-2">
+            <p class="text-lg font-bold text-forest-700" x-text="cam.count"></p>
+            <p class="text-[10px] text-muted">detections</p>
+          </div>
         </div>
       </div>
     </template>
@@ -63,94 +195,284 @@ const STREAMS = {{ streams_json | safe }};
 const BACKEND = '{{ backend_url }}';
 const PROJECT_ID = '{{ project.id }}';
 
+const BASE_TILES = {
+  dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+  terrain: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+  satellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+};
+const BASE_ATTRIB = {
+  dark: '© CARTO',
+  light: '© CARTO',
+  terrain: '© OpenTopoMap',
+  satellite: '© Esri',
+};
+
 function mapPage() {
   return {
     map: null,
+    baseTileLayer: null,
     markerLayer: null,
     heatLayer: null,
+    markersById: {},
     showMarkers: true,
     showHeatmap: true,
-    heatmapData: { points: [] },
+    baseLayer: 'dark',
+
+    range: '7d',
+    selectedSpecies: [],
+    searchQuery: '',
+
+    streamsWithCoords: STREAMS.filter(s => s.latitude && s.longitude),
+    speciesList: [],
+    buckets: [],
+    totalDetections: 0,
+
+    playing: false,
+    currentIndex: 0,
+    playbackSpeed: 400,
+    _playInterval: null,
 
     async init() {
-      await this.fetchHeatmap();
       this.initMap();
+      await this.reloadData();
     },
 
-    async fetchHeatmap() {
-      try {
-        const res = await fetch(`${BACKEND}/api/v1/projects/${PROJECT_ID}/analytics/heatmap?range=7d`);
-        this.heatmapData = await res.json();
-      } catch (e) { console.error(e); }
+    get filteredStreams() {
+      const q = this.searchQuery.toLowerCase();
+      return this.streamsWithCoords
+        .map(s => ({ id: s.id, name: s.name, lat: s.latitude, lng: s.longitude, location_name: s.location_name, status: s.status }))
+        .filter(s => !q || s.name.toLowerCase().includes(q) || (s.location_name || '').toLowerCase().includes(q));
+    },
+
+    get currentBucket() {
+      return this.buckets[this.currentIndex] || null;
+    },
+
+    get currentBucketLabel() {
+      if (!this.currentBucket) return '—';
+      return this.formatBucket(this.currentBucket.t);
+    },
+
+    get currentBucketCount() {
+      const b = this.currentBucket;
+      if (!b) return 0;
+      return Object.values(b.counts).reduce((a, n) => a + n, 0);
+    },
+
+    get topCameras() {
+      const totals = {};
+      this.buckets.forEach(b => {
+        Object.entries(b.counts).forEach(([sid, c]) => {
+          totals[sid] = (totals[sid] || 0) + c;
+        });
+      });
+      return Object.entries(totals)
+        .map(([sid, count]) => {
+          const s = this.streamsWithCoords.find(x => x.id === sid);
+          if (!s) return null;
+          return { id: sid, name: s.name, location_name: s.location_name, lat: s.latitude, lng: s.longitude, count };
+        })
+        .filter(Boolean)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 4);
     },
 
     initMap() {
-      const withCoords = STREAMS.filter(s => s.latitude && s.longitude);
       let center = [20, 0], zoom = 2;
+      const withCoords = this.streamsWithCoords;
       if (withCoords.length === 1) {
         center = [withCoords[0].latitude, withCoords[0].longitude]; zoom = 10;
       } else if (withCoords.length > 1) {
         const lats = withCoords.map(s => s.latitude), lngs = withCoords.map(s => s.longitude);
-        center = [(Math.min(...lats)+Math.max(...lats))/2, (Math.min(...lngs)+Math.max(...lngs))/2]; zoom = 4;
+        center = [(Math.min(...lats)+Math.max(...lats))/2, (Math.min(...lngs)+Math.max(...lngs))/2]; zoom = 3;
       }
 
       this.map = L.map('project-map', { zoomControl: false }).setView(center, zoom);
       L.control.zoom({ position: 'topright' }).addTo(this.map);
+      L.control.scale({ position: 'bottomright', imperial: false }).addTo(this.map);
 
-      // Dark Palantir-style base layer
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
-        subdomains: 'abcd', maxZoom: 19,
+      this.baseTileLayer = L.tileLayer(BASE_TILES.dark, {
+        attribution: BASE_ATTRIB.dark, subdomains: 'abcd', maxZoom: 19,
       }).addTo(this.map);
 
-      // Marker layer — bright colors for dark map
-      const statusColors = { running: '#4ade80', idle: '#fbbf24', error: '#f87171', offline: '#f87171' };
-      this.markerLayer = L.layerGroup();
-      const countsMap = {};
-      this.heatmapData.points.forEach(p => { countsMap[p.stream_id] = p.count; });
-
-      withCoords.forEach(s => {
-        const color = statusColors[s.status] || '#9ca3af';
-        const count = countsMap[s.id] || 0;
-        const icon = L.divIcon({
-          className: '',
-          html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:2px solid rgba(255,255,255,0.8);box-shadow:0 0 8px ${color}, 0 0 16px ${color}44;"></div>`,
-          iconSize: [14, 14], iconAnchor: [7, 7],
-        });
-        const popup = `
-          <img src="${BACKEND}/frames/${s.id}.jpg" class="cam-popup-thumb" onerror="this.style.display='none'">
-          <div style="font-weight:600;font-size:13px;">${s.name}</div>
-          <div style="font-size:11px;color:#6b7280;">${s.location_name || ''}</div>
-          <div style="font-size:10px;margin-top:4px;">
-            <span style="color:${color};font-weight:600;text-transform:uppercase;font-size:9px;letter-spacing:0.05em;">${s.status}</span>
-            <span style="color:#9ca3af;margin:0 4px;">&middot;</span>
-            <span style="font-weight:600;color:#4ade80;">${count} detections</span>
-          </div>
-          <a href="/streams/${s.id}" style="display:inline-block;margin-top:6px;font-size:11px;color:#4ade80;font-weight:500;">View details &rarr;</a>`;
-        L.marker([s.latitude, s.longitude], { icon }).bindPopup(popup, { maxWidth: 260 }).addTo(this.markerLayer);
+      this.markerLayer = L.markerClusterGroup({
+        spiderfyOnMaxZoom: true,
+        showCoverageOnHover: false,
+        maxClusterRadius: 60,
       });
-      this.markerLayer.addTo(this.map);
+      this.map.addLayer(this.markerLayer);
 
-      // Heatmap layer
-      const heatPoints = this.heatmapData.points
-        .filter(p => p.count > 0)
-        .map(p => [p.lat, p.lng, p.count]);
-      if (heatPoints.length > 0) {
-        this.heatLayer = L.heatLayer(heatPoints, {
-          radius: 40, blur: 30, maxZoom: 12, minOpacity: 0.3,
-          gradient: { 0.1: '#0a2f1f', 0.3: '#166534', 0.5: '#22c55e', 0.7: '#fbbf24', 0.9: '#ef4444', 1.0: '#ff2222' },
-        });
-        this.heatLayer.addTo(this.map);
-      }
+      this.drawMarkers({});
 
       if (withCoords.length > 1) {
-        this.map.fitBounds(L.latLngBounds(withCoords.map(s => [s.latitude, s.longitude])), { padding: [40, 40] });
+        this.map.fitBounds(L.latLngBounds(withCoords.map(s => [s.latitude, s.longitude])), { padding: [50, 50] });
       }
+    },
+
+    drawMarkers(countsMap) {
+      this.markerLayer.clearLayers();
+      this.markersById = {};
+      const statusColors = { running: '#4ade80', idle: '#fbbf24', error: '#f87171', offline: '#f87171' };
+
+      this.streamsWithCoords.forEach(s => {
+        const color = statusColors[s.status] || '#9ca3af';
+        const count = countsMap[s.id] || 0;
+        const size = Math.min(14 + count * 0.6, 28);
+
+        const icon = L.divIcon({
+          className: '',
+          html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};
+                  border:2px solid rgba(255,255,255,0.9);
+                  box-shadow:0 0 8px ${color}, 0 0 16px ${color}55;
+                  display:flex;align-items:center;justify-content:center;
+                  color:#000;font-weight:700;font-size:10px;font-family:JetBrains Mono,monospace;">
+                  ${count > 0 ? count : ''}
+                  </div>`,
+          iconSize: [size, size], iconAnchor: [size / 2, size / 2],
+        });
+
+        const popup = `
+          <img src="${BACKEND}/frames/${s.id}.jpg" class="cam-popup-thumb" onerror="this.style.display='none'">
+          <div style="font-weight:600;font-size:14px;color:#1a1a1a;">${s.name}</div>
+          <div style="font-size:11px;color:#6b7280;margin-top:2px;">${s.location_name || ''}</div>
+          <div style="font-size:11px;margin-top:6px;display:flex;align-items:center;gap:8px;">
+            <span style="color:${color};font-weight:600;text-transform:uppercase;font-size:9px;letter-spacing:0.05em;">${s.status || 'idle'}</span>
+            <span style="color:#9ca3af;">·</span>
+            <span style="font-weight:600;color:#16a34a;">${count} detections</span>
+          </div>
+          <div style="margin-top:8px;display:flex;gap:8px;">
+            <a href="/streams/${s.id}" style="font-size:11px;color:#16a34a;font-weight:500;">Stream details →</a>
+            <a href="/projects/{{ project.id }}/detections?stream_id=${s.id}" style="font-size:11px;color:#6b7280;font-weight:500;">Detections →</a>
+          </div>`;
+
+        const marker = L.marker([s.latitude, s.longitude], { icon }).bindPopup(popup, { maxWidth: 280 });
+        this.markerLayer.addLayer(marker);
+        this.markersById[s.id] = marker;
+      });
+    },
+
+    drawHeatmap(countsMap) {
+      if (this.heatLayer) {
+        this.map.removeLayer(this.heatLayer);
+        this.heatLayer = null;
+      }
+      const heatPoints = this.streamsWithCoords
+        .map(s => [s.latitude, s.longitude, countsMap[s.id] || 0])
+        .filter(p => p[2] > 0);
+      if (heatPoints.length === 0) return;
+      this.heatLayer = L.heatLayer(heatPoints, {
+        radius: 45, blur: 32, maxZoom: 12, minOpacity: 0.35,
+        gradient: { 0.1: '#0a2f1f', 0.3: '#166534', 0.5: '#22c55e', 0.7: '#fbbf24', 0.9: '#ef4444', 1.0: '#ff2222' },
+      });
+      if (this.showHeatmap) this.heatLayer.addTo(this.map);
+    },
+
+    async reloadData() {
+      this.stopPlay();
+      const params = new URLSearchParams({ range: this.range });
+      if (this.selectedSpecies.length > 0) {
+        params.set('species', this.selectedSpecies.join(','));
+      }
+      try {
+        const res = await fetch(`${BACKEND}/api/v1/projects/${PROJECT_ID}/analytics/map_timeline?${params}`);
+        const data = await res.json();
+        this.buckets = data.buckets || [];
+        this.speciesList = data.species || [];
+        this.totalDetections = this.buckets.reduce((a, b) => a + this.bucketTotal(b), 0);
+        this.currentIndex = Math.max(this.buckets.length - 1, 0);
+        this.updateMapForBucket();
+      } catch (e) { console.error(e); }
+    },
+
+    cumulativeCountsAt(index) {
+      const out = {};
+      for (let i = 0; i <= index && i < this.buckets.length; i++) {
+        Object.entries(this.buckets[i].counts).forEach(([sid, c]) => {
+          out[sid] = (out[sid] || 0) + c;
+        });
+      }
+      return out;
+    },
+
+    updateMapForBucket() {
+      const counts = this.cumulativeCountsAt(this.currentIndex);
+      this.drawMarkers(counts);
+      this.drawHeatmap(counts);
+    },
+
+    bucketTotal(b) {
+      return Object.values(b.counts).reduce((a, n) => a + n, 0);
+    },
+
+    barHeight(b) {
+      const max = Math.max(...this.buckets.map(x => this.bucketTotal(x)), 1);
+      return 15 + (this.bucketTotal(b) / max) * 85;
+    },
+
+    barColor(i) {
+      const max = Math.max(...this.buckets.map(x => this.bucketTotal(x)), 1);
+      const r = this.bucketTotal(this.buckets[i]) / max;
+      if (r < 0.2) return '#a7f3d0';
+      if (r < 0.5) return '#fbbf24';
+      return '#ef4444';
+    },
+
+    setRange(r) {
+      this.range = r;
+      this.reloadData();
+    },
+
+    toggleSpecies(name) {
+      const i = this.selectedSpecies.indexOf(name);
+      if (i >= 0) this.selectedSpecies.splice(i, 1);
+      else this.selectedSpecies.push(name);
+      this.reloadData();
+    },
+
+    togglePlay() {
+      if (this.playing) this.stopPlay();
+      else this.startPlay();
+    },
+
+    startPlay() {
+      if (this.buckets.length === 0) return;
+      if (this.currentIndex >= this.buckets.length - 1) this.currentIndex = 0;
+      this.playing = true;
+      this._playInterval = setInterval(() => {
+        this.currentIndex++;
+        if (this.currentIndex >= this.buckets.length) {
+          this.currentIndex = this.buckets.length - 1;
+          this.stopPlay();
+          return;
+        }
+        this.updateMapForBucket();
+      }, this.playbackSpeed);
+    },
+
+    stopPlay() {
+      this.playing = false;
+      if (this._playInterval) {
+        clearInterval(this._playInterval);
+        this._playInterval = null;
+      }
+    },
+
+    reset() {
+      this.stopPlay();
+      this.currentIndex = this.buckets.length > 0 ? this.buckets.length - 1 : 0;
+      this.updateMapForBucket();
+    },
+
+    seekTo(i) {
+      this.stopPlay();
+      this.currentIndex = i;
+      this.updateMapForBucket();
     },
 
     toggleMarkers() {
       this.showMarkers = !this.showMarkers;
-      if (this.showMarkers) this.markerLayer.addTo(this.map);
+      if (this.showMarkers) this.map.addLayer(this.markerLayer);
       else this.map.removeLayer(this.markerLayer);
     },
 
@@ -159,6 +481,35 @@ function mapPage() {
       if (!this.heatLayer) return;
       if (this.showHeatmap) this.heatLayer.addTo(this.map);
       else this.map.removeLayer(this.heatLayer);
+    },
+
+    changeBase() {
+      if (this.baseTileLayer) this.map.removeLayer(this.baseTileLayer);
+      this.baseTileLayer = L.tileLayer(BASE_TILES[this.baseLayer], {
+        attribution: BASE_ATTRIB[this.baseLayer], subdomains: 'abcd', maxZoom: 19,
+      }).addTo(this.map);
+    },
+
+    flyTo(s) {
+      this.searchQuery = '';
+      const lat = s.lat ?? s.latitude;
+      const lng = s.lng ?? s.longitude;
+      this.map.flyTo([lat, lng], 14, { duration: 1.2 });
+      const m = this.markersById[s.id];
+      if (m) setTimeout(() => m.openPopup(), 700);
+    },
+
+    formatBucket(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (this.range === '24h') {
+        return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      }
+      if (this.range === '30d') {
+        return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      }
+      return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' ' +
+             d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     },
   }
 }

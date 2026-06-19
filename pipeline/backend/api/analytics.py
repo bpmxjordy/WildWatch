@@ -273,6 +273,131 @@ def heatmap_data(project_id):
     })
 
 
+@analytics_bp.route("/projects/<uuid:project_id>/analytics/map_timeline", methods=["GET"])
+def map_timeline(project_id):
+    """Time-bucketed detection counts per stream, for animated map playback.
+
+    Returns buckets aligned to the range:
+      24h → 1h buckets (24 frames)
+      7d  → 6h buckets (28 frames)
+      30d → 1d buckets (30 frames)
+
+    Optional ?species=Kea,Bear filters to only those common_names.
+    """
+    range_param = request.args.get("range", "7d")
+    species_filter = request.args.get("species")  # comma-separated
+
+    bucket_map = {
+        "24h": ("hour", timedelta(hours=24), "hour"),
+        "7d": ("6h", timedelta(days=7), "6h"),
+        "30d": ("day", timedelta(days=30), "day"),
+    }
+    bucket_kind, range_delta, _ = bucket_map.get(range_param, bucket_map["7d"])
+    cutoff = datetime.now(timezone.utc) - range_delta
+
+    stream_ids, streams = _get_stream_ids(project_id)
+    if not stream_ids:
+        return jsonify({"buckets": [], "streams": [], "species": []})
+
+    # Build trunc expression
+    trunc_exprs = {
+        "hour": "date_trunc('hour', detected_at)",
+        "6h": "date_trunc('hour', detected_at) - "
+              "((EXTRACT(hour FROM detected_at)::int %% 6) * interval '1 hour')",
+        "day": "date_trunc('day', detected_at)",
+    }
+    trunc_expr = trunc_exprs[bucket_kind]
+
+    params = {"stream_ids": stream_ids, "cutoff": cutoff}
+    species_where = ""
+    if species_filter:
+        names = [s.strip() for s in species_filter.split(",") if s.strip()]
+        if names:
+            species_where = "AND common_name = ANY(:species_list)"
+            params["species_list"] = names
+
+    sql = f"""
+        SELECT {trunc_expr} AS bucket,
+               stream_id,
+               COUNT(*) AS count
+        FROM detections
+        WHERE stream_id = ANY(:stream_ids)
+          AND detected_at >= :cutoff
+          {species_where}
+        GROUP BY bucket, stream_id
+        ORDER BY bucket
+    """
+    rows = db.session.execute(db.text(sql), params).fetchall()
+
+    # Generate all buckets in the range so playback has continuous frames
+    bucket_step = {"hour": timedelta(hours=1), "6h": timedelta(hours=6), "day": timedelta(days=1)}[bucket_kind]
+    bucket_starts = []
+    t = cutoff
+    # Align to bucket boundary
+    if bucket_kind == "hour":
+        t = t.replace(minute=0, second=0, microsecond=0)
+    elif bucket_kind == "6h":
+        t = t.replace(minute=0, second=0, microsecond=0)
+        t = t - timedelta(hours=t.hour % 6)
+    else:
+        t = t.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    now = datetime.now(timezone.utc)
+    while t <= now:
+        bucket_starts.append(t)
+        t += bucket_step
+
+    # Map of bucket → {stream_id: count}
+    buckets_map: dict[datetime, dict[str, int]] = {b: {} for b in bucket_starts}
+    for row in rows:
+        b = row.bucket
+        # Normalize: row.bucket should be timezone-aware
+        if b.tzinfo is None:
+            b = b.replace(tzinfo=timezone.utc)
+        if b in buckets_map:
+            buckets_map[b][str(row.stream_id)] = row.count
+
+    buckets_out = [
+        {"t": b.isoformat(), "counts": buckets_map[b]}
+        for b in bucket_starts
+    ]
+
+    # Available species (for the filter UI)
+    species_rows = db.session.execute(
+        db.text("""
+            SELECT common_name, COUNT(*) AS count
+            FROM detections
+            WHERE stream_id = ANY(:stream_ids)
+              AND common_name IS NOT NULL
+              AND detected_at >= :cutoff
+            GROUP BY common_name
+            ORDER BY count DESC
+        """),
+        {"stream_ids": stream_ids, "cutoff": cutoff},
+    )
+    species_list = [{"name": r.common_name, "count": r.count} for r in species_rows]
+
+    streams_out = [
+        {
+            "id": str(s.id),
+            "name": s.name,
+            "lat": s.latitude,
+            "lng": s.longitude,
+            "status": s.status,
+            "location_name": s.location_name,
+        }
+        for s in streams if s.latitude and s.longitude
+    ]
+
+    return jsonify({
+        "buckets": buckets_out,
+        "streams": streams_out,
+        "species": species_list,
+        "bucket_kind": bucket_kind,
+        "range": range_param,
+    })
+
+
 @analytics_bp.route("/projects/<uuid:project_id>/analytics/stream_stats", methods=["GET"])
 def stream_stats(project_id):
     """Per-stream detection stats."""

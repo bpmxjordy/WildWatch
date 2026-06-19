@@ -180,6 +180,17 @@ def create_app():
         project = requests.get(f"{api}/api/v1/projects/{project_id}", timeout=5).json()
         return render_template("analytics/dashboard.html", project=project)
 
+    # ── Detections viewer ─────────────────────────────
+    @app.route("/projects/<project_id>/detections")
+    def project_detections(project_id):
+        project = requests.get(f"{api}/api/v1/projects/{project_id}", timeout=5).json()
+        streams = requests.get(f"{api}/api/v1/projects/{project_id}/streams", timeout=5).json()
+        return render_template(
+            "detections/list.html",
+            project=project,
+            streams_json=json.dumps(streams),
+        )
+
     # ── Notification routes ─────────────────────────────
     @app.route("/projects/<project_id>/notifications")
     def project_notifications(project_id):

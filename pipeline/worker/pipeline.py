@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
+from PIL import Image
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
@@ -39,6 +41,16 @@ def _extract_for_stream(stream: dict) -> tuple[dict, str | None]:
     frame_path = os.path.join(FRAMES_DIR, f"{slug}.jpg")
     success = extract_frame(stream["source_url"], frame_path, stream["platform"])
     return (stream, frame_path if success else None)
+
+
+def _compute_frame_hash(frame_path: str) -> str | None:
+    """Compute a small perceptual hash so re-encoded but identical frames match."""
+    try:
+        with Image.open(frame_path) as img:
+            tiny = img.convert("L").resize((16, 16))
+            return hashlib.md5(tiny.tobytes()).hexdigest()
+    except Exception:
+        return None
 
 
 def process_batch(
@@ -79,6 +91,7 @@ def process_batch(
 
     now = datetime.now(timezone.utc).isoformat()
 
+    skipped_unchanged = 0
     for stream, frame_path in extracted:
         model_id = stream.get("model_id")
         framework = stream.get("framework")
@@ -92,6 +105,24 @@ def process_batch(
             )
             session.commit()
             continue
+
+        # Skip inference if frame hasn't changed since last run
+        if redis_client:
+            frame_hash = _compute_frame_hash(frame_path)
+            if frame_hash:
+                hash_key = f"stream:framehash:{stream['id']}"
+                prev = redis_client.get(hash_key)
+                if prev and prev.decode("utf-8", errors="replace") == frame_hash:
+                    logger.info("[%s] frame unchanged — skipping inference", stream["name"])
+                    scheduler.mark_success(stream["id"])
+                    session.execute(
+                        text("UPDATE streams SET status = 'running', last_frame_at = :now, consecutive_failures = 0 WHERE id = :id"),
+                        {"now": now, "id": stream["id"]},
+                    )
+                    session.commit()
+                    skipped_unchanged += 1
+                    continue
+                redis_client.set(hash_key, frame_hash, ex=86400)
 
         try:
             detector = model_pool.get(
@@ -187,7 +218,11 @@ def process_batch(
         _prune_old_detections(session, [s["id"] for s, _ in extracted])
 
     t2 = time.time()
-    logger.info("Batch complete: %d streams in %.1fs", len(extracted), t2 - t0)
+    if skipped_unchanged:
+        logger.info("Batch complete: %d streams in %.1fs (%d skipped — frame unchanged)",
+                    len(extracted), t2 - t0, skipped_unchanged)
+    else:
+        logger.info("Batch complete: %d streams in %.1fs", len(extracted), t2 - t0)
 
 
 _prune_counter = [0]

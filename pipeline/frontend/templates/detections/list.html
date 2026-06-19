@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+{% block title %}Detections — {{ project.name }} — WildSight{% endblock %}
+
+{% block content %}
+<div x-data="detectionsPage()" x-init="init()">
+  <a href="/projects/{{ project.id }}" class="inline-flex items-center gap-1 text-sm text-muted hover:text-ink transition-colors mb-4">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+    </svg>
+    Back to Project
+  </a>
+
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="font-serif text-3xl font-bold tracking-tight">Saved Detections</h1>
+      <p class="text-muted text-sm mt-1" x-text="total + ' total detections' + (filtersActive() ? ' (filtered)' : '')"></p>
+    </div>
+    <div class="flex gap-2">
+      <button @click="view = 'grid'" :class="view === 'grid' ? 'bg-forest-600 text-white' : 'text-muted hover:bg-gray-100'"
+              class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors">Grid</button>
+      <button @click="view = 'table'" :class="view === 'table' ? 'bg-forest-600 text-white' : 'text-muted hover:bg-gray-100'"
+              class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors">Table</button>
+    </div>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="bg-white rounded-xl border border-rule p-4 mb-6">
+    <div class="grid sm:grid-cols-4 gap-3">
+      <div>
+        <label class="text-[10px] font-mono uppercase tracking-wider text-muted">Time range</label>
+        <select x-model="filters.range" @change="reload()"
+                class="mt-1 w-full px-2 py-1.5 border border-rule rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-forest-300">
+          <option value="">All time</option>
+          <option value="24h">Last 24 hours</option>
+          <option value="7d">Last 7 days</option>
+          <option value="30d">Last 30 days</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-[10px] font-mono uppercase tracking-wider text-muted">Camera</label>
+        <select x-model="filters.stream_id" @change="reload()"
+                class="mt-1 w-full px-2 py-1.5 border border-rule rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-forest-300">
+          <option value="">All cameras</option>
+          <template x-for="s in streams" :key="s.id">
+            <option :value="s.id" x-text="s.name"></option>
+          </template>
+        </select>
+      </div>
+      <div>
+        <label class="text-[10px] font-mono uppercase tracking-wider text-muted">Species</label>
+        <select x-model="filters.species" @change="reload()"
+                class="mt-1 w-full px-2 py-1.5 border border-rule rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-forest-300">
+          <option value="">All species</option>
+          <template x-for="sp in availableSpecies" :key="sp">
+            <option :value="sp" x-text="sp"></option>
+          </template>
+        </select>
+      </div>
+      <div>
+        <label class="text-[10px] font-mono uppercase tracking-wider text-muted">Min confidence</label>
+        <div class="flex items-center gap-2 mt-1">
+          <input type="range" min="0" max="100" step="5" x-model.number="filters.min_confidence_pct"
+                 @change="reload()" class="flex-1 accent-forest-600">
+          <span class="text-xs font-mono w-10 text-right" x-text="filters.min_confidence_pct + '%'"></span>
+        </div>
+      </div>
+    </div>
+    <div class="flex justify-between items-center mt-3 pt-3 border-t border-rule">
+      <button @click="resetFilters()" class="text-xs text-muted hover:text-ink transition-colors">Reset filters</button>
+      <span class="text-[10px] font-mono uppercase tracking-wider text-muted" x-text="detections.length + ' shown'"></span>
+    </div>
+  </div>
+
+  <!-- Empty state -->
+  <template x-if="!loading && detections.length === 0">
+    <div class="bg-white rounded-xl border border-rule border-dashed p-12 text-center">
+      <svg class="w-12 h-12 mx-auto mb-3 text-muted opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+      </svg>
+      <p class="text-sm text-muted" x-text="filtersActive() ? 'No detections match your filters' : 'No detections yet'"></p>
+      <p class="text-xs text-muted mt-1" x-show="filtersActive()">Try resetting filters or expanding the time range</p>
+    </div>
+  </template>
+
+  <!-- Grid view -->
+  <template x-if="view === 'grid' && detections.length > 0">
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+      <template x-for="d in detections" :key="d.id">
+        <div @click="openDetail(d)"
+             class="group bg-white rounded-xl border border-rule overflow-hidden hover:shadow-md hover:border-forest-300 transition-all cursor-pointer">
+          <div class="relative aspect-video bg-gray-100 overflow-hidden">
+            <img :src="thumbUrl(d)" class="w-full h-full object-cover" onerror="this.style.opacity='0.2'" loading="lazy">
+            <div class="absolute top-2 left-2">
+              <span class="px-1.5 py-0.5 bg-forest-600/90 backdrop-blur-sm text-white text-[10px] rounded font-mono"
+                    x-text="(d.confidence * 100).toFixed(0) + '%'"></span>
+            </div>
+          </div>
+          <div class="p-2.5">
+            <p class="text-sm font-medium truncate group-hover:text-forest-700" x-text="d.common_name || d.species_label"></p>
+            <div class="flex items-center justify-between mt-1">
+              <span class="text-[10px] text-muted truncate" x-text="d.stream_name"></span>
+              <span class="text-[10px] font-mono text-muted" x-text="formatTime(d.detected_at)"></span>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+  </template>
+
+  <!-- Table view -->
+  <template x-if="view === 'table' && detections.length > 0">
+    <div class="bg-white rounded-xl border border-rule overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 border-b border-rule">
+          <tr>
+            <th class="text-left px-3 py-2 font-medium text-muted text-xs">Preview</th>
+            <th class="text-left px-3 py-2 font-medium text-muted text-xs">Species</th>
+            <th class="text-left px-3 py-2 font-medium text-muted text-xs">Camera</th>
+            <th class="text-left px-3 py-2 font-medium text-muted text-xs">Confidence</th>
+            <th class="text-left px-3 py-2 font-medium text-muted text-xs">When</th>
+            <th class="text-left px-3 py-2 font-medium text-muted text-xs">BBox</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-rule">
+          <template x-for="d in detections" :key="d.id">
+            <tr @click="openDetail(d)" class="hover:bg-gray-50/50 cursor-pointer">
+              <td class="px-3 py-2">
+                <img :src="thumbUrl(d)" class="w-16 h-10 object-cover rounded" onerror="this.style.opacity='0.2'">
+              </td>
+              <td class="px-3 py-2 font-medium" x-text="d.common_name || d.species_label"></td>
+              <td class="px-3 py-2 text-muted" x-text="d.stream_name"></td>
+              <td class="px-3 py-2 font-mono text-xs" x-text="(d.confidence * 100).toFixed(1) + '%'"></td>
+              <td class="px-3 py-2 font-mono text-xs text-muted" x-text="formatFull(d.detected_at)"></td>
+              <td class="px-3 py-2 font-mono text-[10px] text-muted" x-text="d.bbox ? formatBbox(d.bbox) : '—'"></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </template>
+
+  <!-- Load more -->
+  <div class="flex justify-center mt-6" x-show="detections.length < total && !loading">
+    <button @click="loadMore()" class="px-5 py-2 text-sm border border-rule rounded-lg hover:bg-gray-50 transition-colors">
+      Load more <span class="text-muted" x-text="'(' + (total - detections.length) + ' remaining)'"></span>
+    </button>
+  </div>
+
+  <!-- Loading -->
+  <div class="flex justify-center mt-6" x-show="loading">
+    <svg class="animate-spin w-6 h-6 text-forest-600" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+    </svg>
+  </div>
+
+  <!-- Detail modal -->
+  <div x-show="selected" @keydown.escape.window="selected = null"
+       class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+       @click.self="selected = null" x-cloak>
+    <div class="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col" x-show="selected">
+      <div class="flex items-center justify-between px-5 py-3 border-b border-rule">
+        <div>
+          <h3 class="font-serif text-xl font-semibold" x-text="selected?.common_name || selected?.species_label || 'Detection'"></h3>
+          <p class="text-xs text-muted font-mono" x-text="selected?.id"></p>
+        </div>
+        <button @click="selected = null" class="text-muted hover:text-ink p-1">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="overflow-y-auto">
+        <div class="bg-gray-100 aspect-video flex items-center justify-center">
+          <img x-show="selected" :src="thumbUrl(selected)" class="max-w-full max-h-[60vh] object-contain">
+        </div>
+        <div class="p-5 grid sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+          <div>
+            <p class="text-[10px] font-mono uppercase tracking-wider text-muted">Species</p>
+            <p class="font-medium" x-text="selected?.common_name || '—'"></p>
+            <p class="text-xs text-muted font-mono" x-text="selected?.species_label || ''"></p>
+          </div>
+          <div>
+            <p class="text-[10px] font-mono uppercase tracking-wider text-muted">Confidence</p>
+            <p class="font-mono" x-text="selected ? (selected.confidence * 100).toFixed(2) + '%' : ''"></p>
+          </div>
+          <div>
+            <p class="text-[10px] font-mono uppercase tracking-wider text-muted">Camera</p>
+            <a :href="'/streams/' + selected?.stream_id" class="font-medium text-forest-600 hover:underline" x-text="selected?.stream_name"></a>
+          </div>
+          <div>
+            <p class="text-[10px] font-mono uppercase tracking-wider text-muted">Detected at</p>
+            <p class="font-mono text-xs" x-text="selected ? formatFull(selected.detected_at) : ''"></p>
+          </div>
+          <div class="sm:col-span-2" x-show="selected?.bbox">
+            <p class="text-[10px] font-mono uppercase tracking-wider text-muted">Bounding box (normalized)</p>
+            <p class="font-mono text-xs" x-text="selected?.bbox ? formatBbox(selected.bbox) : ''"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const BACKEND = '{{ backend_url }}';
+const PROJECT_ID = '{{ project.id }}';
+const STREAMS = {{ streams_json | safe }};
+
+function detectionsPage() {
+  return {
+    detections: [],
+    streams: STREAMS,
+    availableSpecies: [],
+    total: 0,
+    loading: false,
+    view: 'grid',
+    selected: null,
+    filters: { range: '7d', stream_id: '', species: '', min_confidence_pct: 0 },
+
+    async init() {
+      await Promise.all([this.fetchSpecies(), this.reload()]);
+    },
+
+    async fetchSpecies() {
+      try {
+        const res = await fetch(`${BACKEND}/api/v1/projects/${PROJECT_ID}/analytics/species?range=30d`);
+        const data = await res.json();
+        this.availableSpecies = (data.species || []).map(s => s.name);
+      } catch (e) { console.error(e); }
+    },
+
+    async reload() {
+      this.loading = true;
+      this.detections = [];
+      await this.fetchPage(0);
+      this.loading = false;
+    },
+
+    async loadMore() {
+      this.loading = true;
+      await this.fetchPage(this.detections.length);
+      this.loading = false;
+    },
+
+    async fetchPage(offset) {
+      const params = new URLSearchParams({ offset, limit: 60 });
+      if (this.filters.range) params.set('range', this.filters.range);
+      if (this.filters.stream_id) params.set('stream_id', this.filters.stream_id);
+      if (this.filters.species) params.set('species', this.filters.species);
+      if (this.filters.min_confidence_pct > 0) {
+        params.set('min_confidence', this.filters.min_confidence_pct / 100);
+      }
+
+      try {
+        const res = await fetch(`${BACKEND}/api/v1/projects/${PROJECT_ID}/detections?${params}`);
+        const data = await res.json();
+        this.detections = [...this.detections, ...(data.detections || [])];
+        this.total = data.total || 0;
+      } catch (e) { console.error(e); }
+    },
+
+    resetFilters() {
+      this.filters = { range: '7d', stream_id: '', species: '', min_confidence_pct: 0 };
+      this.reload();
+    },
+
+    filtersActive() {
+      return this.filters.range !== '7d' || this.filters.stream_id || this.filters.species || this.filters.min_confidence_pct > 0;
+    },
+
+    thumbUrl(d) {
+      if (!d) return '';
+      // The stored frame_path is server-local — fall back to the latest annotated stream frame
+      return `${BACKEND}/frames/${d.stream_id}_annotated.jpg`;
+    },
+
+    openDetail(d) { this.selected = d; },
+
+    formatTime(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      const now = new Date();
+      const diff = (now - d) / 1000;
+      if (diff < 60) return 'just now';
+      if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+      if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+      return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    },
+
+    formatFull(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    },
+
+    formatBbox(b) {
+      return `(${b.x1.toFixed(3)}, ${b.y1.toFixed(3)}) → (${b.x2.toFixed(3)}, ${b.y2.toFixed(3)})`;
+    },
+  }
+}
+</script>
+{% endblock %}
