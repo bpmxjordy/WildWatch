@@ -11,6 +11,19 @@ export default async function HomePage() {
     .eq("is_active", true)
     .order("latest_detection_at", { ascending: false, nullsFirst: false });
 
+  const thumbnailUrls = (streams ?? [])
+    .map((s) => s.latest_detection_thumbnail_url)
+    .filter(Boolean) as string[];
+
+  const { data: cardDetections } = thumbnailUrls.length > 0
+    ? await supabase
+        .from("detections")
+        .select("*")
+        .in("thumbnail_path", thumbnailUrls)
+        .gte("confidence", 0.8)
+        .not("bbox_x1", "is", null)
+    : { data: [] };
+
   const liveCount = streams?.filter((s) => s.is_live).length ?? 0;
 
   return (
@@ -29,7 +42,7 @@ export default async function HomePage() {
           </span>
         </p>
       </div>
-      <StreamGrid initialStreams={streams ?? []} />
+      <StreamGrid initialStreams={streams ?? []} cardDetections={cardDetections ?? []} />
     </div>
   );
 }

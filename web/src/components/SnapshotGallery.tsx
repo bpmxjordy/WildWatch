@@ -9,9 +9,12 @@ interface SnapshotGalleryProps {
   detections: Detection[];
 }
 
+const MIN_BBOX_CONFIDENCE = 0.8;
+
 export default function SnapshotGallery({ detections }: SnapshotGalleryProps) {
   const [selected, setSelected] = useState<Detection | null>(null);
   const withThumbnails = detections.filter((d) => d.thumbnail_path);
+  const highConfidence = withThumbnails.filter((d) => d.confidence >= MIN_BBOX_CONFIDENCE);
 
   if (withThumbnails.length === 0) {
     return (
@@ -21,7 +24,7 @@ export default function SnapshotGallery({ detections }: SnapshotGalleryProps) {
     );
   }
 
-  // Group detections by thumbnail so we can overlay all boxes per frame
+  // Group ALL detections by thumbnail for frame list
   const byThumbnail = new Map<string, Detection[]>();
   withThumbnails.forEach((d) => {
     const key = d.thumbnail_path!;
@@ -29,6 +32,14 @@ export default function SnapshotGallery({ detections }: SnapshotGalleryProps) {
     byThumbnail.get(key)!.push(d);
   });
   const uniqueFrames = Array.from(byThumbnail.entries());
+
+  // Only show bboxes for high-confidence detections (80%+)
+  const highConfByThumb = new Map<string, Detection[]>();
+  highConfidence.forEach((d) => {
+    const key = d.thumbnail_path!;
+    if (!highConfByThumb.has(key)) highConfByThumb.set(key, []);
+    highConfByThumb.get(key)!.push(d);
+  });
 
   return (
     <>
@@ -47,8 +58,8 @@ export default function SnapshotGallery({ detections }: SnapshotGalleryProps) {
                 className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
                 loading="lazy"
               />
-              {/* Bounding boxes */}
-              {frameDets.map((d) => (
+              {/* Bounding boxes (80%+ confidence only) */}
+              {(highConfByThumb.get(thumb) || []).map((d) => (
                 <BoundingBoxOverlay key={d.id} detection={d} showLabel={false} />
               ))}
               {/* Expand icon on hover */}
@@ -68,9 +79,9 @@ export default function SnapshotGallery({ detections }: SnapshotGalleryProps) {
                   {primary.common_name}
                 </span>
               )}
-              {frameDets.length > 1 && (
+              {(highConfByThumb.get(thumb) || []).length > 1 && (
                 <span className="absolute left-1 top-1 rounded-sm bg-black/50 px-1.5 py-0.5 font-mono text-[8.5px] tracking-wider text-white">
-                  {frameDets.length} detections
+                  {(highConfByThumb.get(thumb) || []).length} detections
                 </span>
               )}
               {primary.detected_at && (

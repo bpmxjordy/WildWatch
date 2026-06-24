@@ -36,9 +36,11 @@ export default function DetectionLightbox({
 
   const sameFrame = allDetections.filter(
     (d) =>
-      d.thumbnail_path === detection.thumbnail_path && d.thumbnail_path != null
+      d.thumbnail_path === detection.thumbnail_path &&
+      d.thumbnail_path != null &&
+      d.confidence >= 0.8
   );
-  const detectionsToShow = sameFrame.length > 0 ? sameFrame : [detection];
+  const detectionsToShow = sameFrame.length > 0 ? sameFrame : (detection.confidence >= 0.8 ? [detection] : []);
 
   return (
     <div

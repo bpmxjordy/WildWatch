@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { Stream } from "@/lib/supabase/types";
+import type { Stream, Detection } from "@/lib/supabase/types";
 import {
   DETECTION_STALE_SECONDS,
   STREAM_WILDLIFE_CATEGORY,
@@ -13,15 +13,26 @@ import SortSelect, { type SortOption } from "./SortSelect";
 
 interface StreamGridProps {
   initialStreams: Stream[];
+  cardDetections?: Detection[];
 }
 
-export default function StreamGrid({ initialStreams }: StreamGridProps) {
+export default function StreamGrid({ initialStreams, cardDetections = [] }: StreamGridProps) {
   const streams = initialStreams;
   const [search, setSearch] = useState("");
   const [showAnimalsOnly, setShowAnimalsOnly] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<WildlifeCategory | "">("");
   const [speciesFilter, setSpeciesFilter] = useState("");
   const [sort, setSort] = useState<SortOption>("latest");
+
+  const detsByThumb = useMemo(() => {
+    const map = new Map<string, Detection[]>();
+    cardDetections.forEach((d) => {
+      if (!d.thumbnail_path) return;
+      if (!map.has(d.thumbnail_path)) map.set(d.thumbnail_path, []);
+      map.get(d.thumbnail_path)!.push(d);
+    });
+    return map;
+  }, [cardDetections]);
 
   const availableSpecies = useMemo(() => {
     const names = new Set<string>();
@@ -127,7 +138,11 @@ export default function StreamGrid({ initialStreams }: StreamGridProps) {
       ) : (
         <div className="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((stream) => (
-            <StreamCard key={stream.id} stream={stream} />
+            <StreamCard
+              key={stream.id}
+              stream={stream}
+              detections={detsByThumb.get(stream.latest_detection_thumbnail_url ?? "") ?? []}
+            />
           ))}
         </div>
       )}
