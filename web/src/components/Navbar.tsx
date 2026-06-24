@@ -20,6 +20,12 @@ export default function Navbar() {
             Live cameras
           </Link>
           <Link
+            href="/map"
+            className="rounded-full px-3.5 py-2 text-[13px] text-ink-2 transition-colors hover:bg-paper-2"
+          >
+            Map
+          </Link>
+          <Link
             href="/about"
             className="rounded-full px-3.5 py-2 text-[13px] text-ink-2 transition-colors hover:bg-paper-2"
           >
