@@ -1,3 +1,6 @@
+"use client";
+
+import { useState, useEffect } from "react";
 import { DETECTION_STALE_SECONDS } from "@/lib/constants";
 
 interface StatusDotProps {
@@ -7,6 +10,19 @@ interface StatusDotProps {
 }
 
 export default function StatusDot({ category, detectedAt, isLive }: StatusDotProps) {
+  const [isRecent, setIsRecent] = useState(false);
+
+  useEffect(() => {
+    if (!detectedAt) return;
+    const check = () => {
+      const age = (Date.now() - new Date(detectedAt).getTime()) / 1000;
+      setIsRecent(age < DETECTION_STALE_SECONDS);
+    };
+    check();
+    const interval = setInterval(check, 30_000);
+    return () => clearInterval(interval);
+  }, [detectedAt]);
+
   if (!isLive) {
     return (
       <span
@@ -18,10 +34,6 @@ export default function StatusDot({ category, detectedAt, isLive }: StatusDotPro
       </span>
     );
   }
-
-  const isRecent =
-    detectedAt &&
-    (Date.now() - new Date(detectedAt).getTime()) / 1000 < DETECTION_STALE_SECONDS;
 
   return (
     <span
