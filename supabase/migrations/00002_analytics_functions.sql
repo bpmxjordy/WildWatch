@@ -12,6 +12,7 @@ BEGIN
   WHERE d.stream_id = p_stream_id
     AND d.detected_at >= NOW() - INTERVAL '24 hours'
     AND d.category = 'animal'
+    AND d.confidence >= 0.5
   GROUP BY EXTRACT(HOUR FROM d.detected_at AT TIME ZONE 'UTC')
   ORDER BY hour;
 END;
@@ -38,6 +39,7 @@ BEGIN
   WHERE d.stream_id = p_stream_id
     AND d.detected_at >= NOW() - INTERVAL '7 days'
     AND d.category = 'animal'
+    AND d.confidence >= 0.5
     AND d.common_name IS NOT NULL
   GROUP BY d.common_name, d.species_label
   ORDER BY detection_count DESC

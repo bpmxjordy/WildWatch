@@ -41,6 +41,7 @@ export default async function StreamPage({ params }: PageProps) {
     .from("detections")
     .select("*")
     .eq("stream_id", stream.id)
+    .gte("confidence", 0.5)
     .order("detected_at", { ascending: false })
     .limit(20);
 
