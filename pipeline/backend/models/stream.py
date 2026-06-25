@@ -4,7 +4,7 @@ from extensions import db
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 
-SUPPORTED_PLATFORMS = ["youtube", "rtsp", "hls", "mjpeg", "jpeg"]
+SUPPORTED_PLATFORMS = ["youtube", "rtsp", "hls", "mjpeg", "jpeg", "photosentinel"]
 
 
 class Stream(db.Model):
