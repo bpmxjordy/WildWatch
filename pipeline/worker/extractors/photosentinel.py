@@ -4,8 +4,10 @@ Source URLs look like: https://msc.imagegallery.co/gallery/#/installation/19493
                       https://<hostname>/gallery/#/installation/<id>
 
 Flow:
-  1. POST guest token to /v1/auth/guest with the project_hostname
-  2. GET /v1/installations/<id> with Authorization header
+  1. GET https://{hostname}/api/login/apiKey  → returns
+     {user_api_key: {api_key, expiry_utc}, api_server_url}
+  2. GET {api_server_url}v1/installations/{id} with
+     `Authorization: apiKey <api_key>`
   3. Download installation.latest_photo.original_url
 """
 import json
@@ -18,9 +20,8 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-API_BASE = "https://api.photosentinel.com/v1"
-_TOKEN_CACHE: dict[str, tuple[str, float]] = {}  # hostname → (token, expires_at)
-_TOKEN_TTL_SECONDS = 30 * 60  # refresh every 30 min to be safe
+_API_KEY_CACHE: dict[str, tuple[str, str, float]] = {}  # hostname → (api_key, api_server_url, expires_at)
+_REFRESH_SLACK = 60  # refresh 1 min before expiry
 
 
 def _parse_url(source_url: str) -> tuple[str, str] | None:
@@ -43,57 +44,90 @@ def _parse_url(source_url: str) -> tuple[str, str] | None:
         return None
 
 
-def _get_token(hostname: str) -> str | None:
-    """Return a cached or freshly-fetched guest API token for the hostname."""
-    now = time.time()
-    cached = _TOKEN_CACHE.get(hostname)
-    if cached and cached[1] > now:
-        return cached[0]
+def _parse_iso_to_epoch(iso: str) -> float:
+    """Parse an ISO8601 UTC timestamp like 2026-06-25T23:16:14.4911541Z to a unix epoch."""
+    try:
+        # Trim sub-second precision past 6 digits (Python max) and normalize Z
+        s = iso.rstrip("Z")
+        # Truncate fractional seconds to 6 digits
+        if "." in s:
+            head, frac = s.split(".", 1)
+            s = f"{head}.{frac[:6]}"
+        # Make tz-aware
+        from datetime import datetime, timezone
+        dt = datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
+        return dt.timestamp()
+    except Exception:
+        return time.time() + 600  # default 10 min ahead
 
-    body = json.dumps({"project_hostname": hostname}).encode("utf-8")
+
+def _get_api_key(hostname: str) -> tuple[str, str] | None:
+    """Return (api_key, api_server_url) for the hostname, cached until expiry."""
+    now = time.time()
+    cached = _API_KEY_CACHE.get(hostname)
+    if cached and cached[2] - _REFRESH_SLACK > now:
+        return cached[0], cached[1]
+
+    url = f"https://{hostname}/api/login/apiKey"
     req = urllib.request.Request(
-        f"{API_BASE}/auth/guest",
-        data=body,
-        method="POST",
-        headers={"Content-Type": "application/json", "User-Agent": "WildSight/1.0"},
+        url,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "Mozilla/5.0 (compatible; WildSight/1.0)",
+        },
     )
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             payload = json.loads(resp.read())
     except Exception as e:
-        logger.warning("Photosentinel auth failed for %s: %s", hostname, e)
+        logger.warning("Photosentinel apiKey fetch failed for %s: %s", hostname, e)
         return None
 
-    token = payload.get("token")
-    if not token:
-        logger.warning("Photosentinel auth returned no token: %s", payload)
+    if not payload.get("ok"):
+        logger.warning("Photosentinel apiKey response not ok for %s: %s", hostname, payload)
         return None
 
-    _TOKEN_CACHE[hostname] = (token, now + _TOKEN_TTL_SECONDS)
-    return token
+    user_api_key = payload.get("user_api_key") or {}
+    api_key = user_api_key.get("api_key")
+    expiry_iso = user_api_key.get("expiry_utc") or user_api_key.get("expiry")
+    api_server_url = (payload.get("api_server_url") or "https://api.photosentinel.com/").rstrip("/") + "/"
+
+    if not api_key:
+        logger.warning("Photosentinel apiKey response missing api_key: %s", payload)
+        return None
+
+    expires_at = _parse_iso_to_epoch(expiry_iso) if expiry_iso else now + 600
+    _API_KEY_CACHE[hostname] = (api_key, api_server_url, expires_at)
+    return api_key, api_server_url
 
 
 def _fetch_latest_photo_url(hostname: str, installation_id: str) -> str | None:
-    token = _get_token(hostname)
-    if not token:
+    cached = _get_api_key(hostname)
+    if not cached:
         return None
+    api_key, api_server_url = cached
+
     req = urllib.request.Request(
-        f"{API_BASE}/installations/{installation_id}",
-        headers={"Authorization": token, "User-Agent": "WildSight/1.0"},
+        f"{api_server_url}v1/installations/{installation_id}",
+        headers={
+            "Authorization": f"apiKey {api_key}",
+            "Accept": "application/json",
+            "User-Agent": "Mozilla/5.0 (compatible; WildSight/1.0)",
+        },
     )
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             payload = json.loads(resp.read())
     except Exception as e:
-        # Token might be expired — drop the cache so the next call re-auths
-        _TOKEN_CACHE.pop(hostname, None)
+        # Token might be invalid — drop the cache so the next call re-auths
+        _API_KEY_CACHE.pop(hostname, None)
         logger.warning("Photosentinel installation fetch failed for %s/%s: %s",
                        hostname, installation_id, e)
         return None
 
-    installation = payload.get("installation", {})
+    installation = payload.get("installation") or {}
     latest = installation.get("latest_photo") or {}
-    return latest.get("original_url") or latest.get("url")
+    return latest.get("original_url") or latest.get("preview_url") or latest.get("thumb_url")
 
 
 def extract_photosentinel(source_url: str, output_path: str) -> bool:
@@ -108,7 +142,10 @@ def extract_photosentinel(source_url: str, output_path: str) -> bool:
         return False
 
     try:
-        req = urllib.request.Request(photo_url, headers={"User-Agent": "WildSight/1.0"})
+        req = urllib.request.Request(
+            photo_url,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; WildSight/1.0)"},
+        )
         with urllib.request.urlopen(req, timeout=30) as resp:
             data = resp.read()
         if len(data) < 1000:
