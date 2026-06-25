@@ -1,32 +1,8 @@
-# Training images (too large for git)
-kea_training/dataset/
-kea_training/dataset_v2/
-kea_training/dataset_v3/
-kea_training/images/
-
-# Test video frames
-kea_training/test_video/
-kea_training/test_video2/
-
-# Base model weights (downloadable)
-kea_training/yolo11m.pt
-kea_training/yolo11n.pt
-kea_training/yolo26n.pt
-
-# Large metadata files
-kea_training/metadata.json
-kea_training/metadata.zip
-kea_training/caltech_meta.json
-kea_training/megadetector_results.json
-kea_training/megadetector_results_full.json
-
-# Checkpoint weights (only keep best.pt)
-kea_training/**/last.pt
-
-# Active training script (user edits frequently)
-kea_training/train_v3_full.py
+# Entire kea_training directory is local-only (training scripts,
+# datasets, run results, model weights). Re-add specific files
+# with `git add -f <path>` if you want to publish them.
+kea_training/
 
 # Cache files
-kea_training/**/*.cache
 __pycache__/
 *.pyc
