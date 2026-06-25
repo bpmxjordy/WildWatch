@@ -15,23 +15,35 @@ _insert_count: dict[str, int] = {}
 
 
 def upload_thumbnail(supabase: Client, stream_slug: str, frame_path: str) -> str | None:
-    """Upload a single latest.jpg per stream, overwriting the previous one."""
-    storage_path = f"{stream_slug}/latest.jpg"
+    """Upload a timestamped snapshot and update latest.jpg alias."""
+    now = datetime.now(timezone.utc)
+    ts = now.strftime("%Y%m%d_%H%M%S")
+    snapshot_path = f"{stream_slug}/{ts}.jpg"
 
     with open(frame_path, "rb") as f:
         data = f.read()
 
     try:
         supabase.storage.from_("thumbnails").upload(
-            storage_path,
+            snapshot_path,
             data,
-            {"content-type": "image/jpeg", "upsert": "true"},
+            {"content-type": "image/jpeg"},
         )
     except Exception as e:
         logger.warning("Thumbnail upload failed: %s", e)
         return None
 
-    return supabase.storage.from_("thumbnails").get_public_url(storage_path)
+    # Also update latest.jpg for the stream card thumbnail
+    try:
+        supabase.storage.from_("thumbnails").upload(
+            f"{stream_slug}/latest.jpg",
+            data,
+            {"content-type": "image/jpeg", "upsert": "true"},
+        )
+    except Exception:
+        pass
+
+    return supabase.storage.from_("thumbnails").get_public_url(snapshot_path)
 
 
 def upsert_detection(
@@ -91,24 +103,46 @@ def upsert_detection(
     if category != "animal":
         return
 
-    bbox = parsed.get("bbox")
-    supabase.table("detections").insert(
-        {
-            "stream_id": stream_id,
-            "species_label": label,
-            "common_name": common_name,
-            "category": category,
-            "confidence": confidence,
-            "classification_confidence": parsed.get("confidence"),
-            "prediction_source": parsed.get("prediction_source"),
-            "bbox_x1": bbox[0] if bbox else None,
-            "bbox_y1": bbox[1] if bbox else None,
-            "bbox_x2": (bbox[0] + bbox[2]) if bbox else None,
-            "bbox_y2": (bbox[1] + bbox[3]) if bbox else None,
-            "thumbnail_path": thumbnail_url,
-            "detected_at": now,
-        }
-    ).execute()
+    all_bboxes = parsed.get("all_animal_bboxes", [])
+    if all_bboxes:
+        rows = []
+        for det in all_bboxes:
+            bbox = det["bbox"]
+            rows.append({
+                "stream_id": stream_id,
+                "species_label": label,
+                "common_name": common_name,
+                "category": category,
+                "confidence": det["conf"],
+                "classification_confidence": parsed.get("confidence"),
+                "prediction_source": parsed.get("prediction_source"),
+                "bbox_x1": bbox[0],
+                "bbox_y1": bbox[1],
+                "bbox_x2": bbox[0] + bbox[2],
+                "bbox_y2": bbox[1] + bbox[3],
+                "thumbnail_path": thumbnail_url,
+                "detected_at": now,
+            })
+        supabase.table("detections").insert(rows).execute()
+    else:
+        bbox = parsed.get("bbox")
+        supabase.table("detections").insert(
+            {
+                "stream_id": stream_id,
+                "species_label": label,
+                "common_name": common_name,
+                "category": category,
+                "confidence": confidence,
+                "classification_confidence": parsed.get("confidence"),
+                "prediction_source": parsed.get("prediction_source"),
+                "bbox_x1": bbox[0] if bbox else None,
+                "bbox_y1": bbox[1] if bbox else None,
+                "bbox_x2": (bbox[0] + bbox[2]) if bbox else None,
+                "bbox_y2": (bbox[1] + bbox[3]) if bbox else None,
+                "thumbnail_path": thumbnail_url,
+                "detected_at": now,
+            }
+        ).execute()
 
     count = _insert_count.get(stream_id, 0) + 1
     _insert_count[stream_id] = count

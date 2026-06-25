@@ -11,17 +11,17 @@ export default async function HomePage() {
     .eq("is_active", true)
     .order("latest_detection_at", { ascending: false, nullsFirst: false });
 
-  const thumbnailUrls = (streams ?? [])
-    .map((s) => s.latest_detection_thumbnail_url)
-    .filter(Boolean) as string[];
+  const streamIds = (streams ?? []).map((s) => s.id);
 
-  const { data: cardDetections } = thumbnailUrls.length > 0
+  const { data: cardDetections } = streamIds.length > 0
     ? await supabase
         .from("detections")
         .select("*")
-        .in("thumbnail_path", thumbnailUrls)
+        .in("stream_id", streamIds)
         .gte("confidence", 0.9)
         .not("bbox_x1", "is", null)
+        .order("detected_at", { ascending: false })
+        .limit(100)
     : { data: [] };
 
   const liveCount = streams?.filter((s) => s.is_live).length ?? 0;

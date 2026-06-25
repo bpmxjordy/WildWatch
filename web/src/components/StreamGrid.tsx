@@ -24,19 +24,28 @@ export default function StreamGrid({ initialStreams, cardDetections = [] }: Stre
   const [speciesFilter, setSpeciesFilter] = useState("");
   const [sort, setSort] = useState<SortOption>("latest");
 
-  const detsByThumb = useMemo(() => {
-    const map = new Map<string, Detection[]>();
+  const detsByStream = useMemo(() => {
+    // Group by stream_id, then keep only the most recent frame's detections (top 3)
+    const byStream = new Map<string, Detection[]>();
     cardDetections.forEach((d) => {
-      if (!d.thumbnail_path) return;
-      if (!map.has(d.thumbnail_path)) map.set(d.thumbnail_path, []);
-      map.get(d.thumbnail_path)!.push(d);
+      if (!byStream.has(d.stream_id)) byStream.set(d.stream_id, []);
+      byStream.get(d.stream_id)!.push(d);
     });
-    // Keep only top 3 by confidence per thumbnail for card view
-    Array.from(map.entries()).forEach(([key, dets]) => {
-      dets.sort((a: Detection, b: Detection) => b.confidence - a.confidence);
-      if (dets.length > 3) map.set(key, dets.slice(0, 3));
+    const result = new Map<string, Detection[]>();
+    Array.from(byStream.entries()).forEach(([streamId, dets]) => {
+      dets.sort((a: Detection, b: Detection) =>
+        new Date(b.detected_at).getTime() - new Date(a.detected_at).getTime()
+      );
+      // Only keep detections from the most recent thumbnail
+      const latestThumb = dets[0]?.thumbnail_path;
+      const latest = latestThumb
+        ? dets.filter((d: Detection) => d.thumbnail_path === latestThumb)
+        : dets;
+      // Cap at 3 for card view
+      latest.sort((a: Detection, b: Detection) => b.confidence - a.confidence);
+      result.set(streamId, latest.slice(0, 3));
     });
-    return map;
+    return result;
   }, [cardDetections]);
 
   const availableSpecies = useMemo(() => {
@@ -146,7 +155,7 @@ export default function StreamGrid({ initialStreams, cardDetections = [] }: Stre
             <StreamCard
               key={stream.id}
               stream={stream}
-              detections={detsByThumb.get(stream.latest_detection_thumbnail_url ?? "") ?? []}
+              detections={detsByStream.get(stream.id) ?? []}
             />
           ))}
         </div>
