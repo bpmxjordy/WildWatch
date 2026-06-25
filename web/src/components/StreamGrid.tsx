@@ -31,6 +31,11 @@ export default function StreamGrid({ initialStreams, cardDetections = [] }: Stre
       if (!map.has(d.thumbnail_path)) map.set(d.thumbnail_path, []);
       map.get(d.thumbnail_path)!.push(d);
     });
+    // Keep only top 3 by confidence per thumbnail for card view
+    Array.from(map.entries()).forEach(([key, dets]) => {
+      dets.sort((a: Detection, b: Detection) => b.confidence - a.confidence);
+      if (dets.length > 3) map.set(key, dets.slice(0, 3));
+    });
     return map;
   }, [cardDetections]);
 

@@ -20,7 +20,7 @@ export default async function HomePage() {
         .from("detections")
         .select("*")
         .in("thumbnail_path", thumbnailUrls)
-        .gte("confidence", 0.8)
+        .gte("confidence", 0.9)
         .not("bbox_x1", "is", null)
     : { data: [] };
 
