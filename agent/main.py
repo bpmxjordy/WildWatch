@@ -122,7 +122,8 @@ def process_batch(
             category = parsed["category"]
 
             frame_path = os.path.join(FRAMES_DIR, f"{stream['slug']}.jpg")
-            thumbnail_url = upload_thumbnail(supabase, stream["slug"], frame_path)
+            bboxes = parsed.get("all_animal_bboxes") if category == "animal" else None
+            thumbnail_url = upload_thumbnail(supabase, stream["slug"], frame_path, bboxes=bboxes)
 
             upsert_detection(supabase, stream["id"], parsed, thumbnail_url)
             scheduler.mark_processed(stream["id"])

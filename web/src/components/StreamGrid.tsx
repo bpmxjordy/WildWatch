@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { Stream, Detection } from "@/lib/supabase/types";
+import type { Stream } from "@/lib/supabase/types";
 import {
   DETECTION_STALE_SECONDS,
   STREAM_WILDLIFE_CATEGORY,
@@ -13,40 +13,15 @@ import SortSelect, { type SortOption } from "./SortSelect";
 
 interface StreamGridProps {
   initialStreams: Stream[];
-  cardDetections?: Detection[];
 }
 
-export default function StreamGrid({ initialStreams, cardDetections = [] }: StreamGridProps) {
+export default function StreamGrid({ initialStreams }: StreamGridProps) {
   const streams = initialStreams;
   const [search, setSearch] = useState("");
   const [showAnimalsOnly, setShowAnimalsOnly] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<WildlifeCategory | "">("");
   const [speciesFilter, setSpeciesFilter] = useState("");
   const [sort, setSort] = useState<SortOption>("latest");
-
-  const detsByStream = useMemo(() => {
-    // Group by stream_id, then keep only the most recent frame's detections (top 3)
-    const byStream = new Map<string, Detection[]>();
-    cardDetections.forEach((d) => {
-      if (!byStream.has(d.stream_id)) byStream.set(d.stream_id, []);
-      byStream.get(d.stream_id)!.push(d);
-    });
-    const result = new Map<string, Detection[]>();
-    Array.from(byStream.entries()).forEach(([streamId, dets]) => {
-      dets.sort((a: Detection, b: Detection) =>
-        new Date(b.detected_at).getTime() - new Date(a.detected_at).getTime()
-      );
-      // Only keep detections from the most recent thumbnail
-      const latestThumb = dets[0]?.thumbnail_path;
-      const latest = latestThumb
-        ? dets.filter((d: Detection) => d.thumbnail_path === latestThumb)
-        : dets;
-      // Cap at 3 for card view
-      latest.sort((a: Detection, b: Detection) => b.confidence - a.confidence);
-      result.set(streamId, latest.slice(0, 3));
-    });
-    return result;
-  }, [cardDetections]);
 
   const availableSpecies = useMemo(() => {
     const names = new Set<string>();
@@ -152,11 +127,7 @@ export default function StreamGrid({ initialStreams, cardDetections = [] }: Stre
       ) : (
         <div className="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((stream) => (
-            <StreamCard
-              key={stream.id}
-              stream={stream}
-              detections={detsByStream.get(stream.id) ?? []}
-            />
+            <StreamCard key={stream.id} stream={stream} />
           ))}
         </div>
       )}

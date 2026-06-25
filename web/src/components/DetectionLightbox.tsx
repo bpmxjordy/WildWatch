@@ -2,7 +2,6 @@
 
 import { useEffect, useCallback } from "react";
 import type { Detection } from "@/lib/supabase/types";
-import BoundingBoxOverlay from "./BoundingBoxOverlay";
 
 interface DetectionLightboxProps {
   detection: Detection | null;
@@ -12,7 +11,6 @@ interface DetectionLightboxProps {
 
 export default function DetectionLightbox({
   detection,
-  allDetections = [],
   onClose,
 }: DetectionLightboxProps) {
   const handleKeyDown = useCallback(
@@ -34,14 +32,6 @@ export default function DetectionLightbox({
 
   if (!detection) return null;
 
-  const sameFrame = allDetections.filter(
-    (d) =>
-      d.thumbnail_path === detection.thumbnail_path &&
-      d.thumbnail_path != null &&
-      d.confidence >= 0.8
-  );
-  const detectionsToShow = sameFrame.length > 0 ? sameFrame : (detection.confidence >= 0.8 ? [detection] : []);
-
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm"
@@ -61,17 +51,12 @@ export default function DetectionLightbox({
           </svg>
         </button>
 
-        {/* Image with bounding boxes */}
-        <div className="relative">
-          <img
-            src={detection.thumbnail_path!}
-            alt={detection.common_name || "Detection"}
-            className="max-h-[80vh] max-w-[90vw] object-contain"
-          />
-          {detectionsToShow.map((d) => (
-            <BoundingBoxOverlay key={d.id} detection={d} showLabel />
-          ))}
-        </div>
+        {/* Image (bounding boxes are baked into the image by the agent) */}
+        <img
+          src={detection.thumbnail_path!}
+          alt={detection.common_name || "Detection"}
+          className="max-h-[80vh] max-w-[90vw] object-contain"
+        />
 
         {/* Info bar */}
         <div className="flex items-center justify-between border-t border-rule bg-paper px-5 py-3">

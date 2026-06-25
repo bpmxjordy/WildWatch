@@ -1,16 +1,14 @@
 import Link from "next/link";
-import type { Stream, Detection } from "@/lib/supabase/types";
+import type { Stream } from "@/lib/supabase/types";
 import { STREAM_WILDLIFE_CATEGORY, WILDLIFE_CATEGORIES } from "@/lib/constants";
 import DetectionBadge from "./DetectionBadge";
 import StatusDot from "./StatusDot";
-import BoundingBoxOverlay from "./BoundingBoxOverlay";
 
 interface StreamCardProps {
   stream: Stream;
-  detections?: Detection[];
 }
 
-export default function StreamCard({ stream, detections = [] }: StreamCardProps) {
+export default function StreamCard({ stream }: StreamCardProps) {
   const thumbnailUrl =
     stream.latest_detection_thumbnail_url ||
     stream.thumbnail_url ||
@@ -31,9 +29,6 @@ export default function StreamCard({ stream, detections = [] }: StreamCardProps)
           className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
           loading="lazy"
         />
-        {detections.map((d) => (
-          <BoundingBoxOverlay key={d.id} detection={d} showLabel={false} />
-        ))}
         <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-3">
           <div className="flex items-start justify-between gap-2">
             <StatusDot
