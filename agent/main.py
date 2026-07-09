@@ -18,7 +18,7 @@ from config import (
     BATCH_SIZE,
 )
 from consensus import Consensus
-from detector import SpeciesDetector, parse_prediction
+from detector import SpeciesDetector, parse_prediction, DRAW_MIN_CONF
 from extractor import extract_frame
 from scheduler import Scheduler
 from stats import refresh_all_stats
@@ -130,9 +130,15 @@ def process_batch(
             committed = consensus.observe(stream["id"], parsed)
             frame_has_animal = parsed["category"] == "animal"
 
+            # Record all boxes; draw only the confident ones on the snapshot.
+            all_boxes = parsed.get("all_animal_bboxes") or []
+            draw_boxes = (
+                [b for b in all_boxes if b["conf"] >= DRAW_MIN_CONF]
+                if frame_has_animal else None
+            )
+
             frame_path = os.path.join(FRAMES_DIR, f"{stream['slug']}.jpg")
-            bboxes = parsed.get("all_animal_bboxes") if frame_has_animal else None
-            thumbnail_url = upload_thumbnail(supabase, stream["slug"], frame_path, bboxes=bboxes)
+            thumbnail_url = upload_thumbnail(supabase, stream["slug"], frame_path, bboxes=draw_boxes)
 
             upsert_detection(supabase, stream["id"], parsed, committed, thumbnail_url)
             scheduler.mark_processed(stream["id"])
@@ -140,11 +146,13 @@ def process_batch(
             if os.getenv("LABEL_DEBUG"):
                 cls = (result.get("classifications") or {}).get("classes") or []
                 raw_top = cls[0].split(";")[-1].strip() if cls else "n/a"
+                box_confs = [round(b["conf"], 2) for b in all_boxes]
                 logger.info(
-                    "[%s] DEBUG raw_top=%r frame=%s committed=%s(%s)",
+                    "[%s] DEBUG raw_top=%r frame=%s committed=%s(%s) boxes=%s",
                     stream["slug"], raw_top,
                     parsed.get("common_name"),
                     committed.get("common_name"), committed.get("rank"),
+                    box_confs,
                 )
 
             logger.info(

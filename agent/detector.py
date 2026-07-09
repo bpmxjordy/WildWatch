@@ -60,9 +60,14 @@ RANK_SEQUENCE = ["class", "order", "family", "genus", "species"]
 # How much SpeciesNet's own (geofenced) species call we trust outright.
 SPECIES_TRUST = float(os.getenv("SPECIES_TRUST", "0.5"))
 
-# Minimum MegaDetector box confidence for a box to be drawn/stored. Filters out
-# low-confidence noise so snapshots only show boxes we're actually sure about.
-DETECTION_MIN_CONF = float(os.getenv("DETECTION_MIN_CONFIDENCE", "0.6"))
+# Two separate MegaDetector box-confidence floors:
+#   RECORD_MIN_CONF - below this a box is dropped as noise and not stored.
+#   DRAW_MIN_CONF   - boxes below this are still recorded but NOT drawn on the
+#                     snapshot, so the image only shows confident boxes.
+# Recording must not depend on the draw threshold, or low-box frames would store
+# no detection row and the UI would fall back to stale labels.
+RECORD_MIN_CONF = float(os.getenv("DETECTION_RECORD_CONFIDENCE", "0.5"))
+DRAW_MIN_CONF = float(os.getenv("DETECTION_MIN_CONFIDENCE", "0.6"))
 
 # Cumulative probability mass required to commit at each rank. Coarser ranks
 # (family/order) are safe, general statements so they commit more readily;
@@ -199,13 +204,13 @@ def parse_prediction(result: dict) -> dict:
     else:
         category = "blank"
 
-    # Collect confident animal boxes, then de-duplicate overlaps with NMS.
+    # Collect animal boxes above the record floor, then de-dup overlaps with NMS.
     animal_bboxes = []
     for det in detections:
         if (
             det.get("label") == "animal"
             and det.get("bbox")
-            and det.get("conf", 0) >= DETECTION_MIN_CONF
+            and det.get("conf", 0) >= RECORD_MIN_CONF
         ):
             animal_bboxes.append({"bbox": det["bbox"], "conf": det.get("conf", 0)})
     animal_bboxes = _nms(animal_bboxes, iou_threshold=0.5)
