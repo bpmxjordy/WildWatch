@@ -106,14 +106,15 @@ def upsert_detection(
     supabase: Client,
     stream_id: str,
     parsed: dict,
+    committed: dict,
     thumbnail_url: str | None,
 ) -> None:
-    from detector import extract_common_name
-
-    label = parsed.get("label")
-    common_name = extract_common_name(label)
-    category = parsed.get("category", "blank")
-    confidence = parsed.get("confidence", 0)
+    # `committed` is the temporally-smoothed label from the consensus voter;
+    # `parsed` carries this frame's bounding boxes and prediction source.
+    category = committed.get("category", "blank")
+    common_name = committed.get("common_name")
+    label = committed.get("species_label")
+    confidence = committed.get("confidence", 0)
 
     prev = _last_detection.get(stream_id)
     detection_key = f"{category}:{label}"
@@ -155,50 +156,31 @@ def upsert_detection(
             }
         ).eq("id", stream_id).execute()
 
-    # Only insert into detections table for actual wildlife sightings
-    if category != "animal":
+    # Insert detection rows only when THIS frame actually saw an animal, using
+    # the temporally-committed species label for consistency across frames.
+    all_bboxes = parsed.get("all_animal_bboxes", [])
+    if category != "animal" or not all_bboxes:
         return
 
-    all_bboxes = parsed.get("all_animal_bboxes", [])
-    if all_bboxes:
-        rows = []
-        for det in all_bboxes:
-            bbox = det["bbox"]
-            rows.append({
-                "stream_id": stream_id,
-                "species_label": label,
-                "common_name": common_name,
-                "category": category,
-                "confidence": det["conf"],
-                "classification_confidence": parsed.get("confidence"),
-                "prediction_source": parsed.get("prediction_source"),
-                "bbox_x1": bbox[0],
-                "bbox_y1": bbox[1],
-                "bbox_x2": bbox[0] + bbox[2],
-                "bbox_y2": bbox[1] + bbox[3],
-                "thumbnail_path": thumbnail_url,
-                "detected_at": now,
-            })
-        supabase.table("detections").insert(rows).execute()
-    else:
-        bbox = parsed.get("bbox")
-        supabase.table("detections").insert(
-            {
-                "stream_id": stream_id,
-                "species_label": label,
-                "common_name": common_name,
-                "category": category,
-                "confidence": confidence,
-                "classification_confidence": parsed.get("confidence"),
-                "prediction_source": parsed.get("prediction_source"),
-                "bbox_x1": bbox[0] if bbox else None,
-                "bbox_y1": bbox[1] if bbox else None,
-                "bbox_x2": (bbox[0] + bbox[2]) if bbox else None,
-                "bbox_y2": (bbox[1] + bbox[3]) if bbox else None,
-                "thumbnail_path": thumbnail_url,
-                "detected_at": now,
-            }
-        ).execute()
+    rows = []
+    for det in all_bboxes:
+        bbox = det["bbox"]
+        rows.append({
+            "stream_id": stream_id,
+            "species_label": label,
+            "common_name": common_name,
+            "category": category,
+            "confidence": det["conf"],
+            "classification_confidence": confidence,
+            "prediction_source": parsed.get("prediction_source"),
+            "bbox_x1": bbox[0],
+            "bbox_y1": bbox[1],
+            "bbox_x2": bbox[0] + bbox[2],
+            "bbox_y2": bbox[1] + bbox[3],
+            "thumbnail_path": thumbnail_url,
+            "detected_at": now,
+        })
+    supabase.table("detections").insert(rows).execute()
 
     count = _insert_count.get(stream_id, 0) + 1
     _insert_count[stream_id] = count

@@ -17,7 +17,8 @@ from config import (
     MAX_CONCURRENT_EXTRACTIONS,
     BATCH_SIZE,
 )
-from detector import SpeciesDetector, parse_prediction, extract_common_name
+from consensus import Consensus
+from detector import SpeciesDetector, parse_prediction
 from extractor import extract_frame
 from scheduler import Scheduler
 from stats import refresh_all_stats
@@ -53,6 +54,7 @@ def process_batch(
     detector: SpeciesDetector,
     supabase,
     scheduler: Scheduler,
+    consensus: Consensus,
 ) -> None:
     """Extract frames in parallel, batch inference, upload results."""
     t0 = time.time()
@@ -125,22 +127,22 @@ def process_batch(
 
         try:
             parsed = parse_prediction(result)
-            category = parsed["category"]
+            committed = consensus.observe(stream["id"], parsed)
+            frame_has_animal = parsed["category"] == "animal"
 
             frame_path = os.path.join(FRAMES_DIR, f"{stream['slug']}.jpg")
-            bboxes = parsed.get("all_animal_bboxes") if category == "animal" else None
+            bboxes = parsed.get("all_animal_bboxes") if frame_has_animal else None
             thumbnail_url = upload_thumbnail(supabase, stream["slug"], frame_path, bboxes=bboxes)
 
-            upsert_detection(supabase, stream["id"], parsed, thumbnail_url)
+            upsert_detection(supabase, stream["id"], parsed, committed, thumbnail_url)
             scheduler.mark_processed(stream["id"])
 
-            common_name = extract_common_name(parsed.get("label"))
             logger.info(
                 "[%s] %s — %s (%.0f%%)",
                 stream["slug"],
-                category,
-                common_name or "n/a",
-                parsed.get("confidence", 0) * 100,
+                committed.get("category", "blank"),
+                committed.get("common_name") or "n/a",
+                (committed.get("confidence") or 0) * 100,
             )
         except Exception:
             logger.exception("[%s] Upload error", stream["slug"])
@@ -161,6 +163,7 @@ async def main() -> None:
     supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
     detector = SpeciesDetector()
     scheduler = Scheduler()
+    consensus = Consensus()
 
     logger.info("WildWatch agent starting...")
 
@@ -212,7 +215,7 @@ async def main() -> None:
             # Process in batches for GPU efficiency
             for i in range(0, len(ready), BATCH_SIZE):
                 batch = ready[i : i + BATCH_SIZE]
-                process_batch(batch, detector, supabase, scheduler)
+                process_batch(batch, detector, supabase, scheduler, consensus)
 
         except Exception:
             logger.exception("Error in main loop")
