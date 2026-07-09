@@ -10,6 +10,7 @@ from supabase import Client
 logger = logging.getLogger(__name__)
 
 PRUNE_AGE_DAYS = 8  # Keep detections for 8 days (analytics looks at 7)
+IMAGE_TTL_DAYS = 3  # Delete thumbnails older than 3 days from storage
 PRUNE_EVERY_N = 20
 
 _last_detection: dict[str, str | None] = {}
@@ -221,6 +222,47 @@ def _prune_old_detections(supabase: Client, stream_id: str) -> None:
     deleted = len(result.data) if result.data else 0
     if deleted:
         logger.debug("Pruned %d detections older than %d days for stream %s", deleted, PRUNE_AGE_DAYS, stream_id)
+
+
+def prune_old_images(supabase: Client) -> None:
+    """Delete thumbnail images older than IMAGE_TTL_DAYS from storage."""
+    from datetime import timedelta
+    import re
+
+    try:
+        buckets_result = supabase.storage.from_("thumbnails").list()
+        if not buckets_result:
+            return
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=IMAGE_TTL_DAYS)
+        total_deleted = 0
+
+        for folder in buckets_result:
+            folder_name = folder.get("name", "")
+            if not folder_name:
+                continue
+            files = supabase.storage.from_("thumbnails").list(folder_name)
+            to_delete = []
+            for f in files or []:
+                name = f.get("name", "")
+                # Match timestamped files like 20260625_164300.jpg
+                m = re.match(r"(\d{8})_(\d{6})\.jpg$", name)
+                if not m:
+                    continue
+                try:
+                    file_dt = datetime.strptime(f"{m.group(1)}{m.group(2)}", "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+                    if file_dt < cutoff:
+                        to_delete.append(f"{folder_name}/{name}")
+                except ValueError:
+                    continue
+            if to_delete:
+                supabase.storage.from_("thumbnails").remove(to_delete)
+                total_deleted += len(to_delete)
+
+        if total_deleted:
+            logger.info("Pruned %d images older than %d days", total_deleted, IMAGE_TTL_DAYS)
+    except Exception:
+        logger.exception("Image pruning failed")
 
 
 def mark_stream_offline(supabase: Client, stream_id: str) -> None:

@@ -18,7 +18,10 @@ export default function MapClient({ streams }: MapClientProps) {
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return;
 
-    import("leaflet").then((L) => {
+    Promise.all([
+      import("leaflet"),
+      import("leaflet.markercluster"),
+    ]).then(([L]) => {
       const withCoords = streams.filter((s) => s.latitude && s.longitude);
 
       let center: [number, number] = [30, 0];
@@ -52,7 +55,35 @@ export default function MapClient({ streams }: MapClientProps) {
         { subdomains: "abcd", maxZoom: 19 }
       ).addTo(map);
 
-      // Custom markers
+      // Marker cluster group with custom cluster icons
+      const clusterGroup = (L as any).markerClusterGroup({
+        maxClusterRadius: 50,
+        spiderfyOnMaxZoom: true,
+        showCoverageOnHover: false,
+        zoomToBoundsOnClick: true,
+        iconCreateFunction: (cluster: any) => {
+          const count = cluster.getChildCount();
+          const size = count > 10 ? 44 : count > 5 ? 38 : 32;
+          return L.divIcon({
+            className: "",
+            html: `<div style="
+              width:${size}px;height:${size}px;border-radius:50%;
+              background:radial-gradient(circle at 35% 35%, #7db86a, #3d6b32);
+              border:3px solid rgba(245,247,242,0.8);
+              box-shadow:0 0 12px rgba(106,155,90,0.6), 0 0 24px rgba(106,155,90,0.3);
+              display:flex;align-items:center;justify-content:center;
+              font-family:'JetBrains Mono',monospace;font-size:${count > 10 ? 13 : 11}px;
+              font-weight:600;color:#f5f7f2;
+              text-shadow:0 1px 2px rgba(0,0,0,0.4);
+              cursor:pointer;transition:transform 0.15s;
+            ">${count}</div>`,
+            iconSize: [size, size],
+            iconAnchor: [size / 2, size / 2],
+          });
+        },
+      });
+
+      // Individual markers
       withCoords.forEach((s) => {
         const isLive = s.is_live;
         const hasDetection = !!s.latest_detection_at;
@@ -105,8 +136,18 @@ export default function MapClient({ streams }: MapClientProps) {
         );
 
         marker.on("click", () => setSelectedStream(s));
-        marker.addTo(map);
+        clusterGroup.addLayer(marker);
       });
+
+      map.addLayer(clusterGroup);
+
+      // Fit bounds to show all markers
+      if (withCoords.length > 1) {
+        const bounds = L.latLngBounds(
+          withCoords.map((s) => [s.latitude!, s.longitude!] as [number, number])
+        );
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 12 });
+      }
 
       mapInstance.current = map;
       setReady(true);
@@ -207,6 +248,18 @@ export default function MapClient({ streams }: MapClientProps) {
               <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#5a7a5e]" />
               <span className="text-[10px] text-[#d4e2cd]">Offline</span>
             </div>
+            <div className="flex items-center gap-2 mt-1 pt-1 border-t border-[#2d4a30]">
+              <span
+                className="flex h-5 w-5 items-center justify-center rounded-full text-[8px] font-bold text-[#f5f7f2]"
+                style={{
+                  background: "radial-gradient(circle at 35% 35%, #7db86a, #3d6b32)",
+                  border: "2px solid rgba(245,247,242,0.8)",
+                }}
+              >
+                3
+              </span>
+              <span className="text-[10px] text-[#d4e2cd]">Cluster (click to zoom)</span>
+            </div>
           </div>
         </div>
       </div>
@@ -254,7 +307,7 @@ export default function MapClient({ streams }: MapClientProps) {
         </div>
       </div>
 
-      {/* Custom popup styles */}
+      {/* Custom popup & cluster styles */}
       <style jsx global>{`
         .wildwatch-popup .leaflet-popup-content-wrapper {
           background: #f5f7f2;
@@ -278,6 +331,16 @@ export default function MapClient({ streams }: MapClientProps) {
         .leaflet-control-zoom a:hover {
           background: #2d4a30 !important;
           color: #f5f7f2 !important;
+        }
+        .marker-cluster-small,
+        .marker-cluster-medium,
+        .marker-cluster-large {
+          background: none !important;
+        }
+        .marker-cluster-small div,
+        .marker-cluster-medium div,
+        .marker-cluster-large div {
+          background: none !important;
         }
       `}</style>
     </div>

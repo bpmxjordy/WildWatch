@@ -143,6 +143,32 @@ export type Database = {
           },
         ];
       };
+      stream_stats: {
+        Row: {
+          stream_id: string;
+          stats: Json;
+          computed_at: string;
+        };
+        Insert: {
+          stream_id: string;
+          stats: Json;
+          computed_at?: string;
+        };
+        Update: {
+          stream_id?: string;
+          stats?: Json;
+          computed_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "stream_stats_stream_id_fkey";
+            columns: ["stream_id"];
+            isOneToOne: true;
+            referencedRelation: "streams";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       species_events: {
         Row: {
           id: string;
@@ -202,3 +228,15 @@ export type Stream = Database["public"]["Tables"]["streams"]["Row"];
 export type StreamInsert = Database["public"]["Tables"]["streams"]["Insert"];
 export type Detection = Database["public"]["Tables"]["detections"]["Row"];
 export type SpeciesEvent = Database["public"]["Tables"]["species_events"]["Row"];
+
+export interface StreamStats {
+  stream_id: string;
+  stats: {
+    [period: string]: {
+      hourly: number[];
+      total: number;
+      species: { common_name: string; count: number; avg_confidence: number }[];
+    };
+  };
+  computed_at: string;
+}

@@ -19,9 +19,10 @@ from config import (
 from detector import SpeciesDetector, parse_prediction, extract_common_name
 from extractor import extract_frame
 from scheduler import Scheduler
+from stats import refresh_all_stats
 from stream_sources import fetch_active_streams
 from stream_sources import invalidate_stream_cache
-from uploader import upload_thumbnail, upsert_detection, mark_stream_offline
+from uploader import upload_thumbnail, upsert_detection, mark_stream_offline, prune_old_images
 
 logging.basicConfig(
     level=logging.INFO,
@@ -158,8 +159,25 @@ async def main() -> None:
 
     logger.info("WildWatch agent starting...")
 
+    # Run daily maintenance tasks (stats + image pruning)
+    last_maintenance: float = 0
+    MAINTENANCE_INTERVAL = 86400  # 24 hours
+
     while True:
         try:
+            # Daily maintenance: refresh stats and prune old images
+            now = time.time()
+            if now - last_maintenance > MAINTENANCE_INTERVAL:
+                try:
+                    logger.info("Running daily maintenance...")
+                    refresh_all_stats(supabase)
+                    prune_old_images(supabase)
+                    last_maintenance = now
+                    logger.info("Daily maintenance complete.")
+                except Exception:
+                    logger.exception("Maintenance error")
+                    last_maintenance = now  # Don't retry immediately
+
             streams = fetch_active_streams(supabase)
             ready = scheduler.get_next_streams(streams)
 
