@@ -56,7 +56,7 @@ def compute_stream_stats(supabase: Client, stream_id: str) -> dict:
             "confidence", MIN_CONFIDENCE
         ).gte(
             "detected_at", cutoff
-        ).not_("common_name", "is", "null").limit(10000).execute()
+        ).not_.is_("common_name", "null").limit(10000).execute()
 
         species_map: dict[str, dict] = {}
         for row in species_result.data or []:
