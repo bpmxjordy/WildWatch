@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import logging
+import os
 from datetime import datetime, timezone
 
 from PIL import Image, ImageDraw, ImageFont
@@ -9,9 +10,11 @@ from supabase import Client
 
 logger = logging.getLogger(__name__)
 
-PRUNE_AGE_DAYS = 8  # Keep detections for 8 days (analytics looks at 7)
-IMAGE_TTL_DAYS = 3  # Delete thumbnails older than 3 days from storage
-PRUNE_EVERY_N = 20
+# Detection metadata is kept long enough to fully cover the 30-day stats
+# window (with margin). Only the snapshot images are pruned aggressively.
+PRUNE_AGE_DAYS = int(os.getenv("DETECTION_RETENTION_DAYS", "365"))
+IMAGE_TTL_DAYS = int(os.getenv("IMAGE_TTL_DAYS", "3"))  # Delete thumbnails after 3 days
+PRUNE_EVERY_N = 200
 
 _last_detection: dict[str, str | None] = {}
 _insert_count: dict[str, int] = {}
