@@ -12,6 +12,8 @@ services:
       - model-cache:/app/.cache
       # Persist frames directory (optional, for debugging)
       - ./frames:/app/frames
+      # Weekly digest output (text + stat-card image) on the host
+      - ./digest_output:/app/digest_output
       # YouTube cookies for yt-dlp authentication
       - ./cookies.txt:/app/cookies.txt
     # Resource limits for Oracle free tier (ARM Ampere A1)

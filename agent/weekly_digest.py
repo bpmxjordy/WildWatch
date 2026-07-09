@@ -253,9 +253,29 @@ def render_image(d: dict, date_range: str, path: str) -> bool:
     return True
 
 
+def upload_to_storage(supabase, local_path: str, remote_name: str, content_type: str) -> str | None:
+    """Upload a report file to the public thumbnails bucket, return its URL."""
+    with open(local_path, "rb") as f:
+        data = f.read()
+    remote_path = f"reports/{remote_name}"
+    try:
+        supabase.storage.from_("thumbnails").upload(
+            remote_path, data, {"content-type": content_type, "upsert": "true"}
+        )
+    except Exception as e:
+        print(f"Upload failed for {remote_name}: {e}", file=sys.stderr)
+        return None
+    return supabase.storage.from_("thumbnails").get_public_url(remote_path)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--no-image", action="store_true", help="Skip the stat-card image")
+    parser.add_argument(
+        "--no-upload",
+        action="store_true",
+        help="Don't upload to Supabase Storage (local files only)",
+    )
     args = parser.parse_args()
 
     if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
@@ -291,12 +311,30 @@ def main() -> None:
     print("=" * 60 + "\n")
     print(f"Saved text  -> {txt_path}")
 
+    img_path = None
     if not args.no_image:
         img_path = os.path.join(OUTPUT_DIR, f"weekly_digest_{stamp}.png")
         if render_image(d, date_range, img_path):
             print(f"Saved image -> {img_path}")
         else:
             print("Image skipped (Pillow unavailable).")
+            img_path = None
+
+    # Upload to Supabase so the files are reachable from anywhere via URL
+    if not args.no_upload:
+        print("\nUploading to Supabase Storage...")
+        txt_url = upload_to_storage(
+            supabase, txt_path, f"weekly_digest_{stamp}.txt", "text/plain"
+        )
+        if txt_url:
+            print(f"  Text : {txt_url}")
+        if img_path:
+            img_url = upload_to_storage(
+                supabase, img_path, f"weekly_digest_{stamp}.png", "image/png"
+            )
+            if img_url:
+                print(f"  Image: {img_url}")
+                print("\nOpen the Image URL in your browser and save the PNG.")
 
 
 if __name__ == "__main__":
