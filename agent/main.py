@@ -6,6 +6,7 @@ import os
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
 
 from supabase import create_client
 
@@ -23,6 +24,10 @@ from stats import refresh_all_stats
 from stream_sources import fetch_active_streams
 from stream_sources import invalidate_stream_cache
 from uploader import upload_thumbnail, upsert_detection, mark_stream_offline, prune_old_images
+from weekly_digest import generate as generate_weekly_digest
+
+# Weekday the weekly digest is generated on (0 = Monday, UTC).
+DIGEST_WEEKDAY = 0
 
 logging.basicConfig(
     level=logging.INFO,
@@ -162,6 +167,7 @@ async def main() -> None:
     # Run daily maintenance tasks (stats + image pruning)
     last_maintenance: float = 0
     MAINTENANCE_INTERVAL = 86400  # 24 hours
+    last_digest_week: int | None = None  # ISO week number of the last digest
 
     while True:
         try:
@@ -177,6 +183,24 @@ async def main() -> None:
                 except Exception:
                     logger.exception("Maintenance error")
                     last_maintenance = now  # Don't retry immediately
+
+                # Weekly digest: once per ISO week, on the chosen weekday (UTC)
+                today = datetime.now(timezone.utc)
+                iso_week = today.isocalendar()[1]
+                if today.weekday() == DIGEST_WEEKDAY and iso_week != last_digest_week:
+                    try:
+                        logger.info("Generating weekly digest...")
+                        result = generate_weekly_digest(supabase)
+                        if result:
+                            last_digest_week = iso_week
+                            logger.info(
+                                "Weekly digest ready: %s",
+                                result.get("img_url") or result.get("txt_url") or "saved locally",
+                            )
+                        else:
+                            logger.info("Weekly digest skipped (no stats yet).")
+                    except Exception:
+                        logger.exception("Weekly digest error")
 
             streams = fetch_active_streams(supabase)
             ready = scheduler.get_next_streams(streams)

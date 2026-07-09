@@ -268,6 +268,46 @@ def upload_to_storage(supabase, local_path: str, remote_name: str, content_type:
     return supabase.storage.from_("thumbnails").get_public_url(remote_path)
 
 
+def generate(supabase, make_image: bool = True, upload: bool = True) -> dict | None:
+    """Build the digest, write local files, optionally upload. Returns a result
+    dict (text, paths, urls) or None if no stats are available yet."""
+    streams, stats_by_id = load_stats(supabase)
+    if not stats_by_id:
+        return None
+
+    now = datetime.now(timezone.utc)
+    start = now - timedelta(days=7)
+    date_range = f"{start.strftime('%b %d')}–{now.strftime('%b %d, %Y')}"
+
+    d = build_digest(streams, stats_by_id)
+    text = render_text(d, date_range)
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    stamp = now.strftime("%Y%m%d")
+    txt_path = os.path.join(OUTPUT_DIR, f"weekly_digest_{stamp}.txt")
+    with open(txt_path, "w", encoding="utf-8") as f:
+        f.write(text)
+
+    result: dict = {"text": text, "txt_path": txt_path, "img_path": None,
+                    "txt_url": None, "img_url": None}
+
+    if make_image:
+        img_path = os.path.join(OUTPUT_DIR, f"weekly_digest_{stamp}.png")
+        if render_image(d, date_range, img_path):
+            result["img_path"] = img_path
+
+    if upload:
+        result["txt_url"] = upload_to_storage(
+            supabase, txt_path, f"weekly_digest_{stamp}.txt", "text/plain"
+        )
+        if result["img_path"]:
+            result["img_url"] = upload_to_storage(
+                supabase, result["img_path"], f"weekly_digest_{stamp}.png", "image/png"
+            )
+
+    return result
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--no-image", action="store_true", help="Skip the stat-card image")
@@ -283,9 +323,9 @@ def main() -> None:
         sys.exit(1)
 
     supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-    streams, stats_by_id = load_stats(supabase)
+    result = generate(supabase, make_image=not args.no_image, upload=not args.no_upload)
 
-    if not stats_by_id:
+    if result is None:
         print(
             "No stream_stats found yet. Start the agent so it runs its daily "
             "maintenance pass, then try again.",
@@ -293,48 +333,17 @@ def main() -> None:
         )
         sys.exit(1)
 
-    now = datetime.now(timezone.utc)
-    start = now - timedelta(days=7)
-    date_range = f"{start.strftime('%b %d')}–{now.strftime('%b %d, %Y')}"
-
-    d = build_digest(streams, stats_by_id)
-    text = render_text(d, date_range)
-
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    stamp = now.strftime("%Y%m%d")
-    txt_path = os.path.join(OUTPUT_DIR, f"weekly_digest_{stamp}.txt")
-    with open(txt_path, "w", encoding="utf-8") as f:
-        f.write(text)
-
     print("\n" + "=" * 60)
-    print(text)
+    print(result["text"])
     print("=" * 60 + "\n")
-    print(f"Saved text  -> {txt_path}")
-
-    img_path = None
-    if not args.no_image:
-        img_path = os.path.join(OUTPUT_DIR, f"weekly_digest_{stamp}.png")
-        if render_image(d, date_range, img_path):
-            print(f"Saved image -> {img_path}")
-        else:
-            print("Image skipped (Pillow unavailable).")
-            img_path = None
-
-    # Upload to Supabase so the files are reachable from anywhere via URL
-    if not args.no_upload:
-        print("\nUploading to Supabase Storage...")
-        txt_url = upload_to_storage(
-            supabase, txt_path, f"weekly_digest_{stamp}.txt", "text/plain"
-        )
-        if txt_url:
-            print(f"  Text : {txt_url}")
-        if img_path:
-            img_url = upload_to_storage(
-                supabase, img_path, f"weekly_digest_{stamp}.png", "image/png"
-            )
-            if img_url:
-                print(f"  Image: {img_url}")
-                print("\nOpen the Image URL in your browser and save the PNG.")
+    print(f"Saved text  -> {result['txt_path']}")
+    if result["img_path"]:
+        print(f"Saved image -> {result['img_path']}")
+    if result["txt_url"]:
+        print(f"\nText URL : {result['txt_url']}")
+    if result["img_url"]:
+        print(f"Image URL: {result['img_url']}")
+        print("\nOpen the Image URL in your browser and save the PNG.")
 
 
 if __name__ == "__main__":
