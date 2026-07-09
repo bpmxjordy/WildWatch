@@ -18,10 +18,14 @@ export default function MapClient({ streams }: MapClientProps) {
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return;
 
-    Promise.all([
-      import("leaflet"),
-      import("leaflet.markercluster"),
-    ]).then(([L]) => {
+    import("leaflet")
+      .then((mod) => {
+        const Lib: any = (mod as any).default ?? mod;
+        // markercluster augments the Leaflet object; expose it globally first
+        (window as any).L = Lib;
+        return import("leaflet.markercluster").then(() => Lib);
+      })
+      .then((L: any) => {
       const withCoords = streams.filter((s) => s.latitude && s.longitude);
 
       let center: [number, number] = [30, 0];
@@ -55,33 +59,37 @@ export default function MapClient({ streams }: MapClientProps) {
         { subdomains: "abcd", maxZoom: 19 }
       ).addTo(map);
 
-      // Marker cluster group with custom cluster icons
-      const clusterGroup = (L as any).markerClusterGroup({
-        maxClusterRadius: 50,
-        spiderfyOnMaxZoom: true,
-        showCoverageOnHover: false,
-        zoomToBoundsOnClick: true,
-        iconCreateFunction: (cluster: any) => {
-          const count = cluster.getChildCount();
-          const size = count > 10 ? 44 : count > 5 ? 38 : 32;
-          return L.divIcon({
-            className: "",
-            html: `<div style="
-              width:${size}px;height:${size}px;border-radius:50%;
-              background:radial-gradient(circle at 35% 35%, #7db86a, #3d6b32);
-              border:3px solid rgba(245,247,242,0.8);
-              box-shadow:0 0 12px rgba(106,155,90,0.6), 0 0 24px rgba(106,155,90,0.3);
-              display:flex;align-items:center;justify-content:center;
-              font-family:'JetBrains Mono',monospace;font-size:${count > 10 ? 13 : 11}px;
-              font-weight:600;color:#f5f7f2;
-              text-shadow:0 1px 2px rgba(0,0,0,0.4);
-              cursor:pointer;transition:transform 0.15s;
-            ">${count}</div>`,
-            iconSize: [size, size],
-            iconAnchor: [size / 2, size / 2],
-          });
-        },
-      });
+      // Marker cluster group with custom cluster icons, falling back to a
+      // plain layer group if the markercluster plugin failed to attach.
+      const hasCluster = typeof L.markerClusterGroup === "function";
+      const clusterGroup = hasCluster
+        ? L.markerClusterGroup({
+            maxClusterRadius: 50,
+            spiderfyOnMaxZoom: true,
+            showCoverageOnHover: false,
+            zoomToBoundsOnClick: true,
+            iconCreateFunction: (cluster: any) => {
+              const count = cluster.getChildCount();
+              const size = count > 10 ? 44 : count > 5 ? 38 : 32;
+              return L.divIcon({
+                className: "",
+                html: `<div style="
+                  width:${size}px;height:${size}px;border-radius:50%;
+                  background:radial-gradient(circle at 35% 35%, #7db86a, #3d6b32);
+                  border:3px solid rgba(245,247,242,0.8);
+                  box-shadow:0 0 12px rgba(106,155,90,0.6), 0 0 24px rgba(106,155,90,0.3);
+                  display:flex;align-items:center;justify-content:center;
+                  font-family:'JetBrains Mono',monospace;font-size:${count > 10 ? 13 : 11}px;
+                  font-weight:600;color:#f5f7f2;
+                  text-shadow:0 1px 2px rgba(0,0,0,0.4);
+                  cursor:pointer;transition:transform 0.15s;
+                ">${count}</div>`,
+                iconSize: [size, size],
+                iconAnchor: [size / 2, size / 2],
+              });
+            },
+          })
+        : L.layerGroup();
 
       // Individual markers
       withCoords.forEach((s) => {
