@@ -60,6 +60,10 @@ RANK_SEQUENCE = ["class", "order", "family", "genus", "species"]
 # How much SpeciesNet's own (geofenced) species call we trust outright.
 SPECIES_TRUST = float(os.getenv("SPECIES_TRUST", "0.5"))
 
+# Minimum MegaDetector box confidence for a box to be drawn/stored. Filters out
+# low-confidence noise so snapshots only show boxes we're actually sure about.
+DETECTION_MIN_CONF = float(os.getenv("DETECTION_MIN_CONFIDENCE", "0.6"))
+
 # Cumulative probability mass required to commit at each rank. Coarser ranks
 # (family/order) are safe, general statements so they commit more readily;
 # a specific species call demands strong evidence. Setting the ROLLUP_THRESHOLD
@@ -195,10 +199,14 @@ def parse_prediction(result: dict) -> dict:
     else:
         category = "blank"
 
-    # NMS on the frame's animal boxes
+    # Collect confident animal boxes, then de-duplicate overlaps with NMS.
     animal_bboxes = []
     for det in detections:
-        if det.get("label") == "animal" and det.get("bbox"):
+        if (
+            det.get("label") == "animal"
+            and det.get("bbox")
+            and det.get("conf", 0) >= DETECTION_MIN_CONF
+        ):
             animal_bboxes.append({"bbox": det["bbox"], "conf": det.get("conf", 0)})
     animal_bboxes = _nms(animal_bboxes, iou_threshold=0.5)
 
