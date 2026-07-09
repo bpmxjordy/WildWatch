@@ -137,6 +137,16 @@ def process_batch(
             upsert_detection(supabase, stream["id"], parsed, committed, thumbnail_url)
             scheduler.mark_processed(stream["id"])
 
+            if os.getenv("LABEL_DEBUG"):
+                cls = (result.get("classifications") or {}).get("classes") or []
+                raw_top = cls[0].split(";")[-1].strip() if cls else "n/a"
+                logger.info(
+                    "[%s] DEBUG raw_top=%r frame=%s committed=%s(%s)",
+                    stream["slug"], raw_top,
+                    parsed.get("common_name"),
+                    committed.get("common_name"), committed.get("rank"),
+                )
+
             logger.info(
                 "[%s] %s — %s (%.0f%%)",
                 stream["slug"],
