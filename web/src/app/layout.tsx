@@ -6,6 +6,9 @@ import Providers from "@/components/Providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL || "https://thewildwatch.vercel.app"
+  ),
   title: "WildWatch — Live Wildlife Detection",
   description:
     "Browse wildlife livestreams with real-time AI species detection powered by SpeciesNet.",
