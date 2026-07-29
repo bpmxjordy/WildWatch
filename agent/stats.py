@@ -20,64 +20,40 @@ MIN_CONFIDENCE = 0.5
 
 
 def compute_stream_stats(supabase: Client, stream_id: str) -> dict:
-    """Compute hourly activity and species breakdown for all time periods."""
+    """Compute hourly activity and species breakdown for all time periods.
+
+    Uses server-side SQL aggregation (GROUP BY via RPCs) rather than fetching
+    raw rows, so counts scan ALL matching detections instead of being capped at
+    the 1000-row REST limit — and transfer only the small grouped result.
+    """
     now = datetime.now(timezone.utc)
     stats: dict = {}
 
     for period_key, delta in PERIODS.items():
-        cutoff = (now - delta).isoformat()
+        since = (now - delta).isoformat()
 
-        # Hourly activity
-        result = supabase.table("detections").select(
-            "detected_at"
-        ).eq(
-            "stream_id", stream_id
-        ).eq(
-            "category", "animal"
-        ).gte(
-            "confidence", MIN_CONFIDENCE
-        ).gte(
-            "detected_at", cutoff
-        ).limit(10000).execute()
-
+        # Hourly activity (24 grouped rows)
+        hourly_rows = supabase.rpc(
+            "get_hourly_since", {"p_stream_id": stream_id, "p_since": since}
+        ).execute().data or []
         hourly = [0] * 24
-        for row in result.data or []:
-            dt = datetime.fromisoformat(row["detected_at"].replace("Z", "+00:00"))
-            hourly[dt.hour] += 1
+        for row in hourly_rows:
+            h = row["hour"]
+            if 0 <= h < 24:
+                hourly[h] = row["detection_count"]
 
-        # Species breakdown
-        species_result = supabase.table("detections").select(
-            "common_name, confidence"
-        ).eq(
-            "stream_id", stream_id
-        ).eq(
-            "category", "animal"
-        ).gte(
-            "confidence", MIN_CONFIDENCE
-        ).gte(
-            "detected_at", cutoff
-        ).not_.is_("common_name", "null").limit(10000).execute()
-
-        species_map: dict[str, dict] = {}
-        for row in species_result.data or []:
-            name = row["common_name"]
-            if name not in species_map:
-                species_map[name] = {"count": 0, "total_conf": 0.0}
-            species_map[name]["count"] += 1
-            species_map[name]["total_conf"] += row["confidence"]
-
-        species = sorted(
-            [
-                {
-                    "common_name": k,
-                    "count": v["count"],
-                    "avg_confidence": round(v["total_conf"] / v["count"], 3),
-                }
-                for k, v in species_map.items()
-            ],
-            key=lambda x: x["count"],
-            reverse=True,
-        )[:10]
+        # Species breakdown (<=10 grouped rows)
+        species_rows = supabase.rpc(
+            "get_species_since", {"p_stream_id": stream_id, "p_since": since}
+        ).execute().data or []
+        species = [
+            {
+                "common_name": row["common_name"],
+                "count": row["detection_count"],
+                "avg_confidence": round(row["avg_confidence"] or 0, 3),
+            }
+            for row in species_rows
+        ]
 
         stats[period_key] = {
             "hourly": hourly,
