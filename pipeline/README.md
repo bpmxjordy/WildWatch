@@ -47,13 +47,17 @@ Frontend (Flask+Jinja2) :3000  →  Backend (Flask API) :5000  →  PostgreSQL :
 
 ## Features
 
-- **Multi-source streams**: YouTube, RTSP, HLS, MJPEG, JPEG snapshot cameras
-- **Multi-model inference**: YOLOv5, YOLOv8, YOLOv10, YOLO-NAS, SpeciesNet, ONNX, TensorRT, TorchScript
-- **Per-stream class filtering**: Select which species to detect per camera
+- **Multi-source streams**: YouTube, RTSP, HLS, MJPEG, JPEG snapshot, and Photosentinel (msc.imagegallery.co) cameras
+- **Multi-model inference**: YOLOv5, YOLOv8/YOLO11, YOLOv10, YOLO-NAS, SpeciesNet, ONNX, TensorRT, TorchScript
+- **Built-in models**: SpeciesNet v4 (2,000+ species) and a Kea Detector v2 (YOLO11m) are registered out of the box — no upload needed
+- **Single-image inference**: Upload a photo on the `/inference` page and run any model against it (routed through the worker via Redis)
+- **Per-stream class filtering + confidence threshold**: Choose which classes to detect and set a `min_confidence` slider per camera
+- **All-detections-per-frame**: Records every detection above the threshold, not just the top one, for accurate area statistics
 - **GPU memory prediction**: Warns before overcommitting VRAM
-- **Notifications**: Email (SMTP), webhook, browser push with cooldown
+- **Notifications**: Email (SMTP), webhook, browser push with per-rule species/confidence filters and cooldown
 - **Analytics**: Activity timeline, species breakdown, per-stream stats, site activity score
-- **Map view**: Leaflet.js with camera markers, status colors, click-to-view popups
+- **Detections viewer**: Browse recorded detections with snapshots and filters
+- **Map view**: Dark (Palantir-style) Leaflet basemap with camera markers, an activity heatmap that fades with age, status colors, and click-to-view popups
 - **PDF export**: Downloadable reports with charts (24h, 7d, 30d, all time)
 - **Bulk import**: CSV upload for adding multiple streams at once
 
@@ -86,6 +90,7 @@ All settings are in `.env`. Key variables:
 | POST | `/api/v1/streams/test-url` | Test stream URL reachability |
 | GET/POST | `/api/v1/projects/:id/models` | List / upload models |
 | GET/DELETE | `/api/v1/models/:id` | Model detail / remove |
+| POST | `/api/v1/inference` | Single-image inference (upload → worker via Redis) |
 | GET | `/api/v1/streams/:id/detections` | Stream detections |
 | GET/POST | `/api/v1/projects/:id/notifications` | Notification rules |
 | PUT/DELETE | `/api/v1/notifications/:id` | Update / delete rule |
@@ -98,14 +103,25 @@ All settings are in `.env`. Key variables:
 | GET | `/api/v1/gpu` | GPU inventory + utilization |
 | GET | `/api/v1/gpu/predict` | VRAM prediction for loaded models |
 
-## Adding Custom Models
+## Models
+
+Two models are registered automatically on first boot and can be assigned to any stream without uploading anything:
+
+- **SpeciesNet v4 (Built-in)** — Google's 2,000+ species classifier (MegaDetector + EfficientNet V2)
+- **Kea Detector v2 (Built-in)** — a fine-tuned YOLO11m model for kea
+
+### Adding custom models
 
 1. Navigate to your project dashboard
 2. Click **Upload Model**
 3. Select your model file (`.pt`, `.onnx`, `.engine`, `.torchscript`, `.zip`)
-4. Choose the framework (YOLOv8, ONNX, etc.)
+4. Choose the framework (YOLOv8/YOLO11, ONNX, etc.)
 5. Class names are auto-detected for YOLO models; enter manually for ONNX/TensorRT
-6. Go to a stream's Edit page to assign the model and filter classes
+6. Go to a stream's **Edit** page to assign the model, filter which classes to detect, and set the per-stream **confidence threshold**
+
+### Testing a model on a single image
+
+Open **`/inference`**, upload a photo, and pick a model to see detections without attaching a camera — useful for validating a newly uploaded model.
 
 ## GPU Setup
 
