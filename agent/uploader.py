@@ -25,6 +25,12 @@ SNAPSHOT_QUALITY = int(os.getenv("SNAPSHOT_QUALITY", "85"))
 # seeing only the first 100 objects in a folder that holds thousands.
 LIST_PAGE_SIZE = 500
 
+# Pruning is a long sequential walk over Storage. Bound how much one pass may
+# delete so it always returns promptly, and keep a kill switch for when a bulk
+# cleanup (scripts/cleanup-storage.py) is already clearing the same bucket.
+PRUNE_ENABLED = os.getenv("PRUNE_ENABLED", "1") not in ("0", "false", "False")
+PRUNE_MAX_DELETES = int(os.getenv("PRUNE_MAX_DELETES", "5000"))
+
 # Generated weekly digests live in the bucket too and are not regenerable.
 PRUNE_EXCLUDE = {"reports"}
 
@@ -265,6 +271,10 @@ def prune_old_images(supabase: Client) -> None:
     from datetime import timedelta
     import re
 
+    if not PRUNE_ENABLED:
+        logger.info("Image pruning disabled (PRUNE_ENABLED=0)")
+        return
+
     try:
         storage = supabase.storage.from_("thumbnails")
         folders = _list_all(storage, None)
@@ -295,6 +305,12 @@ def prune_old_images(supabase: Client) -> None:
             for i in range(0, len(to_delete), 100):
                 storage.remove(to_delete[i : i + 100])
                 total_deleted += len(to_delete[i : i + 100])
+                if total_deleted >= PRUNE_MAX_DELETES:
+                    logger.info(
+                        "Pruned %d images (hit PRUNE_MAX_DELETES); resuming next pass",
+                        total_deleted,
+                    )
+                    return
 
         if total_deleted:
             logger.info("Pruned %d images older than %d days", total_deleted, IMAGE_TTL_DAYS)

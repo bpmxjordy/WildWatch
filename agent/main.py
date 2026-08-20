@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -29,6 +30,27 @@ from weekly_digest import generate as generate_weekly_digest
 
 # Weekday the weekly digest is generated on (0 = Monday, UTC).
 DIGEST_WEEKDAY = 0
+
+_prune_thread: threading.Thread | None = None
+
+
+def _prune_running() -> bool:
+    return _prune_thread is not None and _prune_thread.is_alive()
+
+
+def _start_prune() -> None:
+    """Run one bounded pruning pass off the main loop."""
+
+    def run() -> None:
+        try:
+            # Its own client: this runs concurrently with the inference loop.
+            prune_old_images(create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY))
+        except Exception:
+            logger.exception("Image pruning error")
+
+    global _prune_thread
+    _prune_thread = threading.Thread(target=run, name="prune", daemon=True)
+    _prune_thread.start()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -204,11 +226,12 @@ async def main() -> None:
     while True:
         try:
             now = time.time()
-            if now - last_prune > PRUNE_INTERVAL:
-                try:
-                    prune_old_images(supabase)
-                except Exception:
-                    logger.exception("Image pruning error")
+            if now - last_prune > PRUNE_INTERVAL and not _prune_running():
+                # Pruning is a long sequential walk over Storage -- running it
+                # inline starved inference completely while it worked through a
+                # backlog. It gets its own thread (and its own client, since the
+                # Supabase client isn't documented as thread-safe).
+                _start_prune()
                 last_prune = now
 
             # Daily maintenance: refresh stats, then the weekly digest
