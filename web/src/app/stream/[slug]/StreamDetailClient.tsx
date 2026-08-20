@@ -41,6 +41,7 @@ export default function StreamDetailClient({ stream, detections }: Props) {
           name={stream.name}
           thumbnailUrl={stream.latest_detection_thumbnail_url || stream.thumbnail_url}
           platform={stream.platform}
+          sourceUrl={stream.source_url}
         />
       </div>
 

@@ -1,22 +1,43 @@
 "use client";
 
+import HlsPlayer from "./HlsPlayer";
+
 interface StreamPlayerProps {
   embedUrl: string;
   name: string;
   thumbnailUrl?: string | null;
   platform?: string | null;
+  /** Human-facing page for the camera, used when playback isn't possible. */
+  sourceUrl?: string | null;
 }
 
 /** Platforms where we link out instead of embedding */
-const EXTERNAL_PLATFORMS = new Set(["jpeg", "mjpeg", "hls"]);
+const EXTERNAL_PLATFORMS = new Set(["jpeg", "mjpeg"]);
 
 const PLATFORM_LABELS: Record<string, string> = {
   jpeg: "Watch live on HDOnTap",
   mjpeg: "Watch live stream",
-  hls: "Watch live on zoo website",
 };
 
-export default function StreamPlayer({ embedUrl, name, thumbnailUrl, platform }: StreamPlayerProps) {
+export default function StreamPlayer({
+  embedUrl,
+  name,
+  thumbnailUrl,
+  platform,
+  sourceUrl,
+}: StreamPlayerProps) {
+  // HLS plays inline in a <video> — no iframe, and no embed permission needed.
+  //
+  // Note the column convention: for these rows `source_url` holds the playable
+  // .m3u8 (it's what the agent pulls frames from, see agent/main.py) while
+  // `embed_url` holds the human-facing camera page. That's inverted from the
+  // other platforms, so don't "tidy" this into embedUrl.
+  if (platform === "hls" && sourceUrl) {
+    return (
+      <HlsPlayer src={sourceUrl} name={name} poster={thumbnailUrl} fallbackUrl={embedUrl} />
+    );
+  }
+
   const isExternal = EXTERNAL_PLATFORMS.has(platform ?? "");
 
   if (isExternal) {
