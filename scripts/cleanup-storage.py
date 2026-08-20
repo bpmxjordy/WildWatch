@@ -112,14 +112,35 @@ def drain_folder(bucket, folder: str, page_size: int, remove_chunk: int) -> tupl
     freed = 0
     while True:
         page = list_page(bucket, folder, page_size, 0)
-        names = [f"{folder}/{f['name']}" for f in page if f.get("name")]
-        if not names:
+        if not page:
             return deleted, freed
-        freed += sum(entry_size(f) for f in page if f.get("name"))
-        for i in range(0, len(names), remove_chunk):
-            bucket.remove(names[i : i + remove_chunk])
-            deleted += len(names[i : i + remove_chunk])
-        print(f"      {deleted} deleted ({human(freed)})", flush=True)
+
+        # Entries with a null id are prefixes, not objects. remove() silently
+        # does nothing to them, so deleting them in a loop never terminates --
+        # they have to be recursed into. An older uploader wrote
+        # `slug/YYYY-MM-DD/HHMMSS.jpg`, so real files do live a level down.
+        objects = [f for f in page if f.get("name") and f.get("id") is not None]
+        prefixes = [f["name"] for f in page if f.get("name") and f.get("id") is None]
+
+        progress = 0
+        if objects:
+            names = [f"{folder}/{f['name']}" for f in objects]
+            freed += sum(entry_size(f) for f in objects)
+            for i in range(0, len(names), remove_chunk):
+                bucket.remove(names[i : i + remove_chunk])
+                deleted += len(names[i : i + remove_chunk])
+                progress += len(names[i : i + remove_chunk])
+            print(f"      {deleted} deleted ({human(freed)})", flush=True)
+
+        for prefix in prefixes:
+            sub_deleted, sub_freed = drain_folder(bucket, f"{folder}/{prefix}", page_size, remove_chunk)
+            deleted += sub_deleted
+            freed += sub_freed
+            progress += sub_deleted
+
+        if progress == 0:
+            # Nothing removable left that we can act on; stop rather than spin.
+            return deleted, freed
 
 
 def entry_size(entry: dict) -> int:
