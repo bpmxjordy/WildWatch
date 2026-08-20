@@ -13,8 +13,20 @@ logger = logging.getLogger(__name__)
 # Detection metadata is kept long enough to fully cover the 30-day stats
 # window (with margin). Only the snapshot images are pruned aggressively.
 PRUNE_AGE_DAYS = int(os.getenv("DETECTION_RETENTION_DAYS", "365"))
-IMAGE_TTL_DAYS = int(os.getenv("IMAGE_TTL_DAYS", "3"))  # Delete thumbnails after 3 days
+# Once blank frames stopped being archived the daily write volume dropped by
+# roughly 10x, so snapshots can be kept far longer than the old 3 days.
+IMAGE_TTL_DAYS = int(os.getenv("IMAGE_TTL_DAYS", "14"))
 PRUNE_EVERY_N = 200
+
+# Full frame quality — storage headroom is spent on resolution, not volume.
+SNAPSHOT_QUALITY = int(os.getenv("SNAPSHOT_QUALITY", "85"))
+
+# Storage list() pages at 100 by default; page through instead of silently
+# seeing only the first 100 objects in a folder that holds thousands.
+LIST_PAGE_SIZE = 500
+
+# Generated weekly digests live in the bucket too and are not regenerable.
+PRUNE_EXCLUDE = {"reports"}
 
 _last_detection: dict[str, str | None] = {}
 _insert_count: dict[str, int] = {}
@@ -24,8 +36,8 @@ LABEL_BG = (106, 155, 90, 200)
 LABEL_TEXT = (255, 255, 255)
 
 
-def _draw_bboxes(frame_path: str, bboxes: list[dict]) -> bytes:
-    """Draw bounding boxes onto the image and return JPEG bytes."""
+def _draw_bboxes(frame_path: str, bboxes: list[dict]) -> Image.Image:
+    """Draw bounding boxes onto the image and return it (encoding is caller's job)."""
     img = Image.open(frame_path).convert("RGBA")
     w, h = img.size
     overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
@@ -56,9 +68,18 @@ def _draw_bboxes(frame_path: str, bboxes: list[dict]) -> bytes:
         draw.rectangle([x1, y1 - lh - 6, x1 + lw + 8, y1], fill=LABEL_BG)
         draw.text((x1 + 4, y1 - lh - 4), label, fill=LABEL_TEXT, font=font)
 
-    result = Image.alpha_composite(img, overlay).convert("RGB")
+    return Image.alpha_composite(img, overlay).convert("RGB")
+
+
+def _encode(frame_path: str, bboxes: list[dict] | None) -> bytes:
+    """Draw any boxes onto the frame and return full-resolution JPEG bytes."""
+    if bboxes:
+        img = _draw_bboxes(frame_path, bboxes)
+    else:
+        img = Image.open(frame_path).convert("RGB")
+
     buf = io.BytesIO()
-    result.save(buf, format="JPEG", quality=85)
+    img.save(buf, format="JPEG", quality=SNAPSHOT_QUALITY, optimize=True)
     return buf.getvalue()
 
 
@@ -67,39 +88,47 @@ def upload_thumbnail(
     stream_slug: str,
     frame_path: str,
     bboxes: list[dict] | None = None,
+    keep_snapshot: bool = True,
 ) -> str | None:
-    """Upload a timestamped snapshot (with bboxes drawn) and update latest.jpg."""
-    now = datetime.now(timezone.utc)
-    ts = now.strftime("%Y%m%d_%H%M%S")
-    snapshot_path = f"{stream_slug}/{ts}.jpg"
+    """Refresh latest.jpg, and archive a timestamped snapshot when it's worth keeping.
 
-    if bboxes:
-        data = _draw_bboxes(frame_path, bboxes)
-    else:
-        with open(frame_path, "rb") as f:
-            data = f.read()
+    A blank frame's only job is to refresh the card thumbnail, so `keep_snapshot`
+    is False for those. Archiving every frame regardless is what filled the
+    bucket: ~1,440 permanent objects per camera per day, the overwhelming
+    majority of them empty scenery.
+    """
+    storage = supabase.storage.from_("thumbnails")
+    data = _encode(frame_path, bboxes)
 
     try:
-        supabase.storage.from_("thumbnails").upload(
+        storage.upload(
+            f"{stream_slug}/latest.jpg",
+            data,
+            {"content-type": "image/jpeg", "upsert": "true"},
+        )
+    except Exception as e:
+        logger.warning("[%s] latest.jpg upload failed: %s", stream_slug, e)
+
+    if not keep_snapshot:
+        # No archive for this frame, so point the card at the rolling alias.
+        # latest.jpg is a stable path behind a CDN, hence the cache-buster.
+        url = storage.get_public_url(f"{stream_slug}/latest.jpg")
+        sep = "&" if "?" in url else "?"
+        return f"{url}{sep}v={int(datetime.now(timezone.utc).timestamp())}"
+
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    snapshot_path = f"{stream_slug}/{ts}.jpg"
+    try:
+        storage.upload(
             snapshot_path,
             data,
             {"content-type": "image/jpeg"},
         )
     except Exception as e:
-        logger.warning("Thumbnail upload failed: %s", e)
+        logger.warning("[%s] snapshot upload failed: %s", stream_slug, e)
         return None
 
-    # Also update latest.jpg for the stream card thumbnail
-    try:
-        supabase.storage.from_("thumbnails").upload(
-            f"{stream_slug}/latest.jpg",
-            data,
-            {"content-type": "image/jpeg", "upsert": "true"},
-        )
-    except Exception:
-        pass
-
-    return supabase.storage.from_("thumbnails").get_public_url(snapshot_path)
+    return storage.get_public_url(snapshot_path)
 
 
 def upsert_detection(
@@ -209,24 +238,47 @@ def _prune_old_detections(supabase: Client, stream_id: str) -> None:
         logger.debug("Pruned %d detections older than %d days for stream %s", deleted, PRUNE_AGE_DAYS, stream_id)
 
 
+def _list_all(storage, path: str | None) -> list[dict]:
+    """List every entry under `path`, paging past Storage's 100-item default."""
+    entries: list[dict] = []
+    offset = 0
+    while True:
+        page = storage.list(
+            path,
+            {
+                "limit": LIST_PAGE_SIZE,
+                "offset": offset,
+                "sortBy": {"column": "name", "order": "asc"},
+            },
+        )
+        if not page:
+            break
+        entries.extend(page)
+        if len(page) < LIST_PAGE_SIZE:
+            break
+        offset += len(page)
+    return entries
+
+
 def prune_old_images(supabase: Client) -> None:
     """Delete thumbnail images older than IMAGE_TTL_DAYS from storage."""
     from datetime import timedelta
     import re
 
     try:
-        buckets_result = supabase.storage.from_("thumbnails").list()
-        if not buckets_result:
+        storage = supabase.storage.from_("thumbnails")
+        folders = _list_all(storage, None)
+        if not folders:
             return
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=IMAGE_TTL_DAYS)
         total_deleted = 0
 
-        for folder in buckets_result:
+        for folder in folders:
             folder_name = folder.get("name", "")
-            if not folder_name:
+            if not folder_name or folder_name in PRUNE_EXCLUDE:
                 continue
-            files = supabase.storage.from_("thumbnails").list(folder_name)
+            files = _list_all(storage, folder_name)
             to_delete = []
             for f in files or []:
                 name = f.get("name", "")
@@ -240,9 +292,9 @@ def prune_old_images(supabase: Client) -> None:
                         to_delete.append(f"{folder_name}/{name}")
                 except ValueError:
                     continue
-            if to_delete:
-                supabase.storage.from_("thumbnails").remove(to_delete)
-                total_deleted += len(to_delete)
+            for i in range(0, len(to_delete), 100):
+                storage.remove(to_delete[i : i + 100])
+                total_deleted += len(to_delete[i : i + 100])
 
         if total_deleted:
             logger.info("Pruned %d images older than %d days", total_deleted, IMAGE_TTL_DAYS)
