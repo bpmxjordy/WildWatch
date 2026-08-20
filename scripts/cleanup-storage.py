@@ -57,39 +57,39 @@ def human(num_bytes: int) -> str:
     return f"{size:.1f} TB"
 
 
-def page_through(bucket, path: str | None, page_size: int) -> list[dict]:
-    """List every entry under `path`, paging past Storage's 100-item default.
+def list_page(bucket, path: str | None, limit: int, offset: int) -> list[dict]:
+    """One list call, retrying on both transport timeouts and Storage's own
+    DatabaseTimeout (statusCode 544), which comes back as a normal response
+    rather than an httpx exception."""
+    for attempt in range(6):
+        try:
+            return bucket.list(
+                path,
+                {
+                    "limit": limit,
+                    "offset": offset,
+                    "sortBy": {"column": "name", "order": "asc"},
+                },
+            )
+        except Exception as exc:  # noqa: BLE001 - transport and API errors alike
+            if attempt == 5:
+                raise
+            if limit > MIN_PAGE_SIZE:
+                limit = max(MIN_PAGE_SIZE, limit // 2)
+            wait = 2**attempt
+            print(f"    list({path or '/'}, offset={offset}) failed ({type(exc).__name__}); retrying with limit={limit} in {wait}s", file=sys.stderr, flush=True)
+            time.sleep(wait)
+    return []
 
-    Large folders can time the endpoint out; on timeout we back off and retry
-    with a smaller page rather than losing the whole folder.
-    """
+
+def page_through(bucket, path: str | None, page_size: int) -> list[dict]:
+    """List every entry under `path`, paging past Storage's 100-item default."""
     entries: list[dict] = []
     offset = 0
     limit = page_size
 
     while True:
-        for attempt in range(5):
-            try:
-                page = bucket.list(
-                    path,
-                    {
-                        "limit": limit,
-                        "offset": offset,
-                        "sortBy": {"column": "name", "order": "asc"},
-                    },
-                )
-                break
-            except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.RemoteProtocolError):
-                if limit > MIN_PAGE_SIZE:
-                    limit = max(MIN_PAGE_SIZE, limit // 2)
-                if attempt == 4:
-                    raise
-                wait = 2**attempt
-                print(f"    timeout listing {path or '/'} at offset {offset}; retrying with limit={limit} in {wait}s", file=sys.stderr)
-                time.sleep(wait)
-        else:  # pragma: no cover - loop always breaks or raises
-            break
-
+        page = list_page(bucket, path, limit, offset)
         if not page:
             break
         entries.extend(page)
@@ -98,6 +98,28 @@ def page_through(bucket, path: str | None, page_size: int) -> list[dict]:
         offset += len(page)
 
     return entries
+
+
+def drain_folder(bucket, folder: str, page_size: int, remove_chunk: int) -> tuple[int, int]:
+    """Delete every object in `folder`, always listing from offset 0.
+
+    Paging deep into a folder holding tens of thousands of objects is what
+    trips Storage's DatabaseTimeout -- offset=20000 is expensive server-side.
+    Since a purge deletes whatever it lists, re-reading the first page after
+    each batch keeps every query cheap and terminates naturally.
+    """
+    deleted = 0
+    freed = 0
+    while True:
+        page = list_page(bucket, folder, page_size, 0)
+        names = [f"{folder}/{f['name']}" for f in page if f.get("name")]
+        if not names:
+            return deleted, freed
+        freed += sum(entry_size(f) for f in page if f.get("name"))
+        for i in range(0, len(names), remove_chunk):
+            bucket.remove(names[i : i + remove_chunk])
+            deleted += len(names[i : i + remove_chunk])
+        print(f"      {deleted} deleted ({human(freed)})", flush=True)
 
 
 def entry_size(entry: dict) -> int:
@@ -159,6 +181,22 @@ def main() -> int:
         if folder in excluded:
             print(f"  {folder:<44} skipped (excluded)", flush=True)
             continue
+
+        # A purge deletes everything, so drain from the top rather than paging
+        # deep -- large offsets are what trip Storage's DatabaseTimeout.
+        if args.purge and args.apply:
+            print(f"  {folder:<44} draining...", flush=True)
+            try:
+                deleted, freed = drain_folder(bucket, folder, args.page_size, args.remove_chunk)
+            except Exception as exc:  # noqa: BLE001 - report and move to the next folder
+                failures.append(f"{folder}: {exc}")
+                print(f"  {folder:<44} FAILED: {type(exc).__name__}", file=sys.stderr, flush=True)
+                continue
+            total_deleted += deleted
+            total_matched += deleted
+            total_bytes += freed
+            continue
+
         files = page_through(bucket, folder, args.page_size)
         doomed: list[str] = []
         folder_bytes = 0
