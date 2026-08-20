@@ -137,8 +137,16 @@ def process_batch(
                 if frame_has_animal else None
             )
 
+            # Blank frames refresh latest.jpg but aren't archived — keeping a
+            # permanent snapshot of every empty frame is what filled storage.
             frame_path = os.path.join(FRAMES_DIR, f"{stream['slug']}.jpg")
-            thumbnail_url = upload_thumbnail(supabase, stream["slug"], frame_path, bboxes=draw_boxes)
+            thumbnail_url = upload_thumbnail(
+                supabase,
+                stream["slug"],
+                frame_path,
+                bboxes=draw_boxes,
+                keep_snapshot=frame_has_animal,
+            )
 
             upsert_detection(supabase, stream["id"], parsed, committed, thumbnail_url)
             scheduler.mark_processed(stream["id"])
@@ -185,20 +193,29 @@ async def main() -> None:
 
     logger.info("WildWatch agent starting...")
 
-    # Run daily maintenance tasks (stats + image pruning)
+    # Stats aggregation is expensive and only feeds daily charts, but pruning
+    # has to keep pace with uploads, so the two run on separate clocks.
+    last_prune: float = 0
     last_maintenance: float = 0
+    PRUNE_INTERVAL = 3600  # 1 hour
     MAINTENANCE_INTERVAL = 86400  # 24 hours
     last_digest_week: int | None = None  # ISO week number of the last digest
 
     while True:
         try:
-            # Daily maintenance: refresh stats and prune old images
             now = time.time()
+            if now - last_prune > PRUNE_INTERVAL:
+                try:
+                    prune_old_images(supabase)
+                except Exception:
+                    logger.exception("Image pruning error")
+                last_prune = now
+
+            # Daily maintenance: refresh stats, then the weekly digest
             if now - last_maintenance > MAINTENANCE_INTERVAL:
                 try:
                     logger.info("Running daily maintenance...")
                     refresh_all_stats(supabase)
-                    prune_old_images(supabase)
                     last_maintenance = now
                     logger.info("Daily maintenance complete.")
                 except Exception:
