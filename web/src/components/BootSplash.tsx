@@ -62,151 +62,22 @@ export default function BootSplash() {
       return;
     }
 
-    const finish = () => {
+    // No dismiss-on-interaction. It used to end on pointerdown/keydown, which
+    // meant a single stray click or keypress after load killed the whole
+    // effect instantly -- at 3.8s a skip affordance isn't worth that.
+    const timer = window.setTimeout(() => {
       window.__wwSplash = false;
       root.removeAttribute("data-ww-splash");
       setMounted(false);
-    };
-    const timer = window.setTimeout(finish, TOTAL_MS);
-    // Let an impatient visitor skip it.
-    window.addEventListener("pointerdown", finish);
-    window.addEventListener("keydown", finish);
+    }, TOTAL_MS);
 
-    return () => {
-      window.clearTimeout(timer);
-      window.removeEventListener("pointerdown", finish);
-      window.removeEventListener("keydown", finish);
-    };
+    return () => window.clearTimeout(timer);
   }, []);
 
   if (!mounted) return null;
 
   return (
     <div className="ww-splash" aria-hidden="true">
-      <style>{`
-        /* Inert unless the pre-paint script opted this load in. */
-        .ww-splash { display: none; }
-
-        html[data-ww-splash] .ww-splash {
-          display: flex;
-          position: fixed;
-          inset: 0;
-          z-index: 200;
-          align-items: center;
-          justify-content: center;
-          background: #F5FFF6;
-          opacity: 1;
-          /* Hold on the finished logo, then reveal. Runs from first paint, so
-             it completes even if hydration is slow. */
-          animation: ww-reveal 700ms ease-in 3100ms forwards;
-        }
-
-        .ww-stage {
-          position: relative;
-          width: 150px;
-          height: 150px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        /* The viewfinder: four brackets that hunt across the screen, then
-           close in on the middle. */
-        .ww-frame {
-          position: absolute;
-          inset: 0;
-          will-change: transform, filter;
-        }
-        @keyframes ww-hunt {
-          0%   { transform: translate(-38vw, -26vh) scale(2.6); opacity: 0; }
-          12%  { opacity: 1; }
-          28%  { transform: translate(34vw, -20vh) scale(2.3); }
-          50%  { transform: translate(26vw, 24vh) scale(2.0); }
-          70%  { transform: translate(-24vw, 18vh) scale(1.7); }
-          86%  { transform: translate(-6vw, -4vh) scale(1.2); }
-          100% { transform: translate(0, 0) scale(1); }
-        }
-
-        /* Motion blur tracks speed: heaviest through the long sweeps, gone by
-           the time it settles, so the frame reads sharp once locked. Blur
-           alone reads as "out of focus" — the trailing copies below are what
-           read as "moving fast". */
-        html[data-ww-splash] .ww-frame.lead {
-          animation:
-            ww-hunt 2000ms cubic-bezier(0.65, 0, 0.35, 1) forwards,
-            ww-blur 2000ms cubic-bezier(0.65, 0, 0.35, 1) forwards;
-        }
-        @keyframes ww-blur {
-          0%   { filter: blur(7px); }
-          40%  { filter: blur(5px); }
-          72%  { filter: blur(3px); }
-          90%  { filter: blur(0.6px); }
-          100% { filter: blur(0); }
-        }
-
-        html[data-ww-splash] .ww-frame.ghost {
-          animation:
-            ww-hunt 2000ms cubic-bezier(0.65, 0, 0.35, 1) forwards,
-            ww-ghost 2000ms ease-out forwards;
-        }
-        html[data-ww-splash] .ww-frame.g1 { animation-delay: 55ms, 0ms; }
-        html[data-ww-splash] .ww-frame.g2 { animation-delay: 110ms, 0ms; }
-        @keyframes ww-ghost {
-          0%   { opacity: 0.5; filter: blur(11px); }
-          55%  { opacity: 0.32; filter: blur(9px); }
-          82%  { opacity: 0; filter: blur(6px); }
-          100% { opacity: 0; filter: blur(0); }
-        }
-
-        .ww-corner {
-          position: absolute;
-          width: 34px;
-          height: 34px;
-          border: 4px solid #5A7A5E;
-          opacity: 0.91;
-        }
-        .ww-corner.tl { top: 0; left: 0; border-right: 0; border-bottom: 0; }
-        .ww-corner.tr { top: 0; right: 0; border-left: 0; border-bottom: 0; }
-        .ww-corner.bl { bottom: 0; left: 0; border-right: 0; border-top: 0; }
-        .ww-corner.br { bottom: 0; right: 0; border-left: 0; border-top: 0; }
-
-        /* The subject resolves as the viewfinder settles. */
-        .ww-bird {
-          width: 78px;
-          height: 78px;
-          position: relative;
-          z-index: 1;
-          opacity: 0;
-          transform: scale(0.82);
-        }
-        html[data-ww-splash] .ww-bird {
-          animation: ww-lock 700ms cubic-bezier(0.34, 1.3, 0.64, 1) 1500ms forwards;
-        }
-        @keyframes ww-lock {
-          from { opacity: 0; transform: scale(0.82); }
-          to   { opacity: 1; transform: scale(1); }
-        }
-
-        /* Lands at 2750ms, comfortably before the 3100ms reveal — previously
-           the wordmark was still fading in as the overlay began fading out. */
-        .ww-wordmark {
-          position: absolute;
-          top: calc(50% + 96px);
-          opacity: 0;
-          transform: translateY(6px);
-          white-space: nowrap;
-        }
-        html[data-ww-splash] .ww-wordmark {
-          animation: ww-word 600ms ease-out 2150ms forwards;
-        }
-        @keyframes ww-word {
-          to { opacity: 1; transform: translateY(0); }
-        }
-
-        @keyframes ww-reveal {
-          to { opacity: 0; visibility: hidden; }
-        }
-      `}</style>
 
       <div className="ww-stage">
         {/* Ghosts first, so the sharp frame sits on top of its own smear */}
