@@ -1,6 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <rect width="32" height="32" rx="7" fill="#3d5e33"/>
-  <path d="M16 6C10 10 8 16 9.5 22c1-2 3-3.5 5.5-4.2C12.5 14 14 10 16 6z" fill="#8fb580"/>
-  <path d="M16 6c6 4 8 10 6.5 16-1-2-3-3.5-5.5-4.2C19.5 14 18 10 16 6z" fill="#6a9b5a"/>
-  <path d="M16 6v20" stroke="#d4e2cd" stroke-width="1.2" stroke-linecap="round" opacity="0.6"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" fill="none">
+  <rect width="1000" height="1000" rx="220" fill="#F5FFF6"/>
+  <!-- Bird -->
+  <path d="M495.178 494.052C363.701 495.869 324.294 630.424 318.943 695.329C395.77 557.43 496.204 532.285 536.818 536.949C533.363 496.214 560.717 396.856 700.837 324.16C635.802 327.58 500.901 362.687 495.178 494.052Z" fill="#5A7A5E"/>
+  <!-- Camera framing corners. Thickened from the source artwork: at favicon
+       sizes the original 41px strokes disappear entirely. -->
+  <path opacity="0.91" fill="#5A7A5E" d="M247 626V757H382V808H196V626H247ZM805 808H625V757H754V626H805V808ZM805 363H754V250H625V199H805V363ZM382 250H247V363H196V199H382V250Z"/>
 </svg>

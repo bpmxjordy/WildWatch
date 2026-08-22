@@ -68,16 +68,25 @@ class Consensus:
             idx = RANK_SEQUENCE.index(rank)
             groups: Counter = Counter()
             confs: dict[tuple, list] = defaultdict(list)
+            commons: dict[tuple, Counter] = defaultdict(Counter)
             for o in animals:
                 if not o.lineage.get(rank):
                     continue
                 key = tuple(o.lineage.get(r, "") for r in RANK_SEQUENCE[: idx + 1])
                 groups[key] += 1
                 confs[key].append(o.confidence)
+                # SpeciesNet supplies a common name per frame, but a lineage key
+                # only carries the ranks -- so it has to be voted on separately
+                # or common_for() falls back to the bare species epithet and
+                # labels a human "Sapiens" and a giraffe "Camelopardalis".
+                if o.lineage.get("common"):
+                    commons[key][o.lineage["common"]] += 1
             if groups:
                 best_key, cnt = groups.most_common(1)[0]
                 if cnt >= MIN_FRAMES and cnt / n >= FRACTION:
                     tax = tax_from_key(best_key)
+                    if commons[best_key]:
+                        tax["common"] = commons[best_key].most_common(1)[0][0]
                     avg_conf = sum(confs[best_key]) / len(confs[best_key])
                     return {
                         "category": "animal",

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import Navbar from "@/components/Navbar";
+import BootSplash from "@/components/BootSplash";
 import Providers from "@/components/Providers";
 import "./globals.css";
 
@@ -55,6 +56,7 @@ export default function RootLayout({
       </head>
       <body>
         <Providers>
+          <BootSplash />
           <Navbar />
           <main className="mx-auto max-w-page px-7 py-9">{children}</main>
           <footer className="border-t border-rule mt-12">

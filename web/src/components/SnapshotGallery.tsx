@@ -40,12 +40,24 @@ export default function SnapshotGallery({ detections }: SnapshotGalleryProps) {
               onClick={() => setSelected(primary)}
               className="group relative aspect-[4/3] cursor-pointer overflow-hidden rounded-sm bg-paper-2 shadow-[0_1px_0_rgba(255,255,255,0.6)_inset,0_1px_2px_rgba(0,0,0,0.04),0_6px_18px_rgba(0,0,0,0.05)] transition-shadow hover:shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
             >
+              {/* Detection rows are kept for a year but snapshots are pruned
+                  after IMAGE_TTL_DAYS, so older rows point at objects that no
+                  longer exist. Degrade to a caption rather than a broken image
+                  icon and its alt text. */}
               <img
                 src={thumb}
                 alt={primary.common_name || "Detection snapshot"}
                 className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
                 loading="lazy"
+                onError={(e) => {
+                  const img = e.currentTarget;
+                  img.style.display = "none";
+                  img.parentElement?.classList.add("snapshot-expired");
+                }}
               />
+              <span className="pointer-events-none absolute inset-0 hidden items-center justify-center px-2 text-center font-serif text-[12px] italic text-muted [.snapshot-expired_&]:flex">
+                Snapshot expired
+              </span>
               {/* Expand icon on hover */}
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
                 <svg

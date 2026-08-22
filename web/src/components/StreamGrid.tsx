@@ -10,6 +10,7 @@ import {
 import StreamCard from "./StreamCard";
 import FilterBar from "./FilterBar";
 import SortSelect, { type SortOption } from "./SortSelect";
+import FeaturedStreams from "./FeaturedStreams";
 
 interface StreamGridProps {
   initialStreams: Stream[];
@@ -100,8 +101,23 @@ export default function StreamGrid({ initialStreams }: StreamGridProps) {
     return result;
   }, [streams, search, showAnimalsOnly, categoryFilter, speciesFilter, sort]);
 
+  // Cameras that play inline here rather than linking out.
+  const featured = useMemo(
+    () => streams.filter((s) => s.platform === "hls" && s.source_url),
+    [streams]
+  );
+
+  // Any narrowing of the list hides the featured row -- once the visitor has
+  // said what they're after, a fixed set of cameras is just in the way. Sort
+  // doesn't count: it reorders rather than narrows.
+  const isFiltered = Boolean(
+    search || categoryFilter || speciesFilter || showAnimalsOnly
+  );
+
   return (
     <div>
+      {!isFiltered && <FeaturedStreams streams={featured} />}
+
       <div className="border-y border-rule py-4 mb-7">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <FilterBar

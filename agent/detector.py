@@ -242,6 +242,12 @@ def parse_prediction(result: dict) -> dict:
         if chosen:
             rank, _key, confidence, tax = chosen
             lineage = {r: tax.get(r, "") for r in RANK_SEQUENCE}
+            # Carry SpeciesNet's own common name alongside the ranks. The
+            # consensus voter rebuilds its taxonomy from a lineage key, which
+            # holds ranks only, so without this it falls back to the bare
+            # species epithet -- "Sapiens" for a human, "Camelopardalis" for a
+            # giraffe.
+            lineage["common"] = tax.get("common", "")
             common_name = common_for(rank, tax)
             species_label = ";".join(v for v in lineage_key(tax, rank) if v)
         else:
