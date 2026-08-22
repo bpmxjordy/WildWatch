@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 
 /**
  * Total runtime, matched to the CSS timeline below. React only uses this to
@@ -9,22 +9,35 @@ import { useEffect, useState } from "react";
  */
 const TOTAL_MS = 3800;
 
+declare global {
+  interface Window {
+    __wwSplash?: boolean;
+  }
+}
+
+/** useLayoutEffect warns during SSR; there is no layout pass on the server. */
+const useIsomorphicLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
 /**
  * First-load splash: a camera viewfinder sweeps the screen hunting for a
  * subject, locks onto the bird from the logo, the wordmark resolves, and the
  * whole thing fades to reveal the site.
  *
  * Whether it plays is decided by the inline script in layout.tsx, before first
- * paint, and communicated via `html.ww-splash-on`. That matters for two
- * reasons:
+ * paint: `window.__wwSplash` plus `html[data-ww-splash]`. That matters for
+ * three reasons:
  *
  *  - A skipped splash is never painted. Deciding in React meant the server
  *    rendered the overlay, the browser painted it, and hydration then removed
  *    it — a flash of splash on every repeat load.
- *  - The animation is pure CSS keyed off that class, so it starts at paint and
- *    runs its full course regardless of when hydration happens. Previously the
- *    keyframes started at paint while the removal timer started at hydration,
- *    so the two could drift apart.
+ *  - The animation is pure CSS keyed off that attribute, so it starts at paint
+ *    and runs its full course regardless of when hydration happens. Previously
+ *    the keyframes started at paint while the removal timer started at
+ *    hydration, so the two could drift apart.
+ *  - The marker is an attribute, not a class, and the decision itself lives on
+ *    `window`. React wipes className on <html> during hydration even though it
+ *    renders none, which killed the splash ~300ms in — measured, not guessed.
  *
  * Shown on first load of a session; refreshes are skipped (navigation type
  * "reload"). `?splash` forces it.
@@ -32,16 +45,26 @@ const TOTAL_MS = 3800;
 export default function BootSplash() {
   const [mounted, setMounted] = useState(true);
 
+  // Runs before paint. React clears attributes it didn't render on <html>
+  // during hydration, which stripped the marker mid-animation; re-assert it
+  // synchronously so the frame after hydration still has it.
+  useIsomorphicLayoutEffect(() => {
+    if (window.__wwSplash) {
+      document.documentElement.setAttribute("data-ww-splash", "1");
+    }
+  });
+
   useEffect(() => {
     const root = document.documentElement;
-    if (!root.classList.contains("ww-splash-on")) {
+    if (!window.__wwSplash) {
       // Never painted (display:none), so removing it now is invisible.
       setMounted(false);
       return;
     }
 
     const finish = () => {
-      root.classList.remove("ww-splash-on");
+      window.__wwSplash = false;
+      root.removeAttribute("data-ww-splash");
       setMounted(false);
     };
     const timer = window.setTimeout(finish, TOTAL_MS);
@@ -64,7 +87,7 @@ export default function BootSplash() {
         /* Inert unless the pre-paint script opted this load in. */
         .ww-splash { display: none; }
 
-        html.ww-splash-on .ww-splash {
+        html[data-ww-splash] .ww-splash {
           display: flex;
           position: fixed;
           inset: 0;
@@ -108,7 +131,7 @@ export default function BootSplash() {
            the time it settles, so the frame reads sharp once locked. Blur
            alone reads as "out of focus" — the trailing copies below are what
            read as "moving fast". */
-        html.ww-splash-on .ww-frame.lead {
+        html[data-ww-splash] .ww-frame.lead {
           animation:
             ww-hunt 2000ms cubic-bezier(0.65, 0, 0.35, 1) forwards,
             ww-blur 2000ms cubic-bezier(0.65, 0, 0.35, 1) forwards;
@@ -121,13 +144,13 @@ export default function BootSplash() {
           100% { filter: blur(0); }
         }
 
-        html.ww-splash-on .ww-frame.ghost {
+        html[data-ww-splash] .ww-frame.ghost {
           animation:
             ww-hunt 2000ms cubic-bezier(0.65, 0, 0.35, 1) forwards,
             ww-ghost 2000ms ease-out forwards;
         }
-        html.ww-splash-on .ww-frame.g1 { animation-delay: 55ms, 0ms; }
-        html.ww-splash-on .ww-frame.g2 { animation-delay: 110ms, 0ms; }
+        html[data-ww-splash] .ww-frame.g1 { animation-delay: 55ms, 0ms; }
+        html[data-ww-splash] .ww-frame.g2 { animation-delay: 110ms, 0ms; }
         @keyframes ww-ghost {
           0%   { opacity: 0.5; filter: blur(11px); }
           55%  { opacity: 0.32; filter: blur(9px); }
@@ -156,7 +179,7 @@ export default function BootSplash() {
           opacity: 0;
           transform: scale(0.82);
         }
-        html.ww-splash-on .ww-bird {
+        html[data-ww-splash] .ww-bird {
           animation: ww-lock 700ms cubic-bezier(0.34, 1.3, 0.64, 1) 1500ms forwards;
         }
         @keyframes ww-lock {
@@ -173,7 +196,7 @@ export default function BootSplash() {
           transform: translateY(6px);
           white-space: nowrap;
         }
-        html.ww-splash-on .ww-wordmark {
+        html[data-ww-splash] .ww-wordmark {
           animation: ww-word 600ms ease-out 2150ms forwards;
         }
         @keyframes ww-word {

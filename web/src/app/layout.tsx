@@ -71,8 +71,14 @@ export default function RootLayout({
   var isReload = nav && nav.type === 'reload';
   var seen = sessionStorage.getItem('ww-splash-seen');
   var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (force || (!reduced && !isReload && !seen)) {
-    document.documentElement.className += ' ww-splash-on';
+  var play = force || (!reduced && !isReload && !seen);
+  /* The decision lives on window because React wipes className on <html>
+     during hydration -- the splash used to vanish ~300ms in, the moment it
+     hydrated. A data attribute survives, and BootSplash re-asserts it before
+     paint from this flag either way. */
+  window.__wwSplash = play;
+  if (play) {
+    document.documentElement.setAttribute('data-ww-splash','1');
     sessionStorage.setItem('ww-splash-seen','1');
   }
 }catch(e){}})();`,
