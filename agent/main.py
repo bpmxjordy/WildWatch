@@ -20,6 +20,7 @@ from config import (
 )
 from consensus import Consensus
 from detector import SpeciesDetector, parse_prediction, DRAW_MIN_CONF
+from events import EventTracker
 from extractor import extract_frame
 from scheduler import Scheduler
 from stats import refresh_all_stats
@@ -77,6 +78,7 @@ def process_batch(
     supabase,
     scheduler: Scheduler,
     consensus: Consensus,
+    events: EventTracker,
 ) -> None:
     """Extract frames in parallel, batch inference, upload results."""
     t0 = time.time()
@@ -171,6 +173,9 @@ def process_batch(
             )
 
             upsert_detection(supabase, stream["id"], parsed, committed, thumbnail_url)
+            # Fold this frame into the stream's presence event, so a single
+            # animal lingering on camera is one sighting rather than N.
+            events.observe(supabase, stream["id"], committed, thumbnail_url)
             scheduler.mark_processed(stream["id"])
 
             if os.getenv("LABEL_DEBUG"):
@@ -212,6 +217,9 @@ async def main() -> None:
     detector = SpeciesDetector()
     scheduler = Scheduler()
     consensus = Consensus()
+    events = EventTracker()
+    # Anything still open belongs to a previous run and can't be verified.
+    events.close_stale(supabase)
 
     logger.info("WildWatch agent starting...")
 
@@ -263,6 +271,10 @@ async def main() -> None:
                     except Exception:
                         logger.exception("Weekly digest error")
 
+            # Close events for cameras that have gone quiet or offline; they
+            # stop producing frames, so observe() would never close them.
+            events.sweep(supabase)
+
             streams = fetch_active_streams(supabase)
             ready = scheduler.get_next_streams(streams)
 
@@ -273,7 +285,7 @@ async def main() -> None:
             # Process in batches for GPU efficiency
             for i in range(0, len(ready), BATCH_SIZE):
                 batch = ready[i : i + BATCH_SIZE]
-                process_batch(batch, detector, supabase, scheduler, consensus)
+                process_batch(batch, detector, supabase, scheduler, consensus, events)
 
         except Exception:
             logger.exception("Error in main loop")
