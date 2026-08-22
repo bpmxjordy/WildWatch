@@ -8,7 +8,6 @@ import DetectionTimeline from "@/components/DetectionTimeline";
 import SnapshotGallery from "@/components/SnapshotGallery";
 import ActivityMonitor from "@/components/ActivityMonitor";
 import SpeciesBreakdown from "@/components/SpeciesBreakdown";
-import SightingsPanel from "@/components/SightingsPanel";
 
 interface Props {
   stream: Stream;
@@ -77,10 +76,6 @@ export default function StreamDetailClient({ stream, detections }: Props) {
       <div className="grid gap-10 lg:grid-cols-[1.45fr_1fr] mb-12">
         <ActivityMonitor streamId={stream.id} longitude={stream.longitude} />
         <SpeciesBreakdown streamId={stream.id} />
-      </div>
-
-      <div className="mb-12">
-        <SightingsPanel streamId={stream.id} />
       </div>
 
       <div className="mb-5 flex items-baseline justify-between border-b border-rule pb-3.5">

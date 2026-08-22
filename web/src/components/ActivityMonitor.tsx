@@ -41,10 +41,12 @@ function ActivityChart({
   data,
   max,
   peakIdx,
+  unit = "obs",
 }: {
   data: number[];
   max: number;
   peakIdx: number;
+  unit?: string;
 }) {
   const [hover, setHover] = useState<{
     idx: number;
@@ -108,7 +110,7 @@ function ActivityChart({
           }}
         >
           <div className="whitespace-nowrap rounded bg-[#1e3320] px-3 py-1.5 font-mono text-[11px] font-medium tracking-[0.04em] text-white shadow-lg">
-            {fmtHr(hover.idx)} &middot; {data[hover.idx]} obs
+            {fmtHr(hover.idx)} &middot; {data[hover.idx]} {unit}
           </div>
           <div className="flex justify-center">
             <div className="h-0 w-0 border-l-[5px] border-r-[5px] border-t-[5px] border-l-transparent border-r-transparent border-t-[#1e3320]" />
@@ -119,11 +121,103 @@ function ActivityChart({
   );
 }
 
+/** Compact duration: 45s, 12m, 2h 5m. */
+function duration(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.round(s / 60)}m`;
+  const h = Math.floor(s / 3600);
+  const m = Math.round((s % 3600) / 60);
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
+function Metric({
+  label,
+  value,
+  unit,
+}: {
+  label: string;
+  value: string;
+  unit: string;
+}) {
+  return (
+    <div>
+      <dt className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">
+        {label}
+      </dt>
+      <dd className="mt-1 font-serif text-[20px] font-medium tracking-tight">
+        {value}
+        <small className="ml-1.5 font-mono text-[10px] font-normal tracking-[0.04em] text-muted">
+          {unit}
+        </small>
+      </dd>
+    </div>
+  );
+}
+
+interface EventSummary {
+  sighting_count: number;
+  species_count: number;
+  total_seconds: number;
+  longest_seconds: number;
+  open_count: number;
+}
+
+const PERIOD_HOURS: Record<PeriodKey, number> = {
+  "24h": 24,
+  "48h": 48,
+  "7d": 24 * 7,
+  "30d": 24 * 30,
+};
+
+type Mode = "detections" | "sightings";
+
 export default function ActivityMonitor({ streamId, longitude }: Props) {
   const [stats, setStats] = useState<StreamStats["stats"] | null>(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<PeriodKey>("24h");
+  const [mode, setMode] = useState<Mode>("detections");
   const offset = getUtcOffset(longitude);
+
+  // Sightings are queried live -- species_events holds one row per visit, so
+  // unlike detections it doesn't need the pre-computed stream_stats path.
+  const [eventHourly, setEventHourly] = useState<number[] | null>(null);
+  const [eventSummary, setEventSummary] = useState<EventSummary | null>(null);
+  const [eventsLoading, setEventsLoading] = useState(false);
+
+  useEffect(() => {
+    if (mode !== "sightings") return;
+    let cancelled = false;
+    const supabase = createClient();
+    const since = new Date(
+      Date.now() - PERIOD_HOURS[period] * 3600 * 1000
+    ).toISOString();
+
+    async function loadEvents() {
+      setEventsLoading(true);
+      const [hourly, summary] = await Promise.all([
+        (supabase as any).rpc("get_event_hourly_since", {
+          p_stream_id: streamId,
+          p_since: since,
+        }),
+        (supabase as any).rpc("get_event_summary_since", {
+          p_stream_id: streamId,
+          p_since: since,
+        }),
+      ]);
+      if (cancelled) return;
+      const buckets = Array.from({ length: 24 }, () => 0);
+      for (const r of hourly.data ?? []) buckets[r.hour] = r.sighting_count;
+      setEventHourly(buckets);
+      setEventSummary((summary.data ?? [])[0] ?? null);
+      setEventsLoading(false);
+    }
+
+    loadEvents();
+    return () => {
+      cancelled = true;
+    };
+  }, [streamId, period, mode]);
 
   useEffect(() => {
     async function fetch() {
@@ -162,7 +256,11 @@ export default function ActivityMonitor({ streamId, longitude }: Props) {
   }, [streamId]);
 
   const periodData = stats?.[period];
-  const rawHourly = periodData?.hourly ?? Array.from({ length: 24 }, () => 0);
+  const detectionHourly = periodData?.hourly ?? Array.from({ length: 24 }, () => 0);
+  const rawHourly =
+    mode === "sightings"
+      ? eventHourly ?? Array.from({ length: 24 }, () => 0)
+      : detectionHourly;
 
   const data = useMemo(() => {
     return rawHourly.map((_, i) => rawHourly[((i - offset) % 24 + 24) % 24]);
@@ -203,7 +301,9 @@ export default function ActivityMonitor({ streamId, longitude }: Props) {
         </h3>
         <div className="flex items-center gap-1">
           {PERIODS.map((p) => {
-            const available = stats?.[p.key];
+            // Sightings are queried live for any window, so the period buttons
+            // aren't gated on which pre-computed stats happen to exist.
+            const available = mode === "sightings" ? true : stats?.[p.key];
             return (
               <button
                 key={p.key}
@@ -224,13 +324,51 @@ export default function ActivityMonitor({ streamId, longitude }: Props) {
         </div>
       </div>
 
-      {total === 0 ? (
+      {/* Detections count every frame an animal appeared in; sightings count
+          each visit once. They disagree by design, so they're separate views
+          of the same window rather than one blended number. */}
+      <div className="mb-4 flex gap-4 border-b border-rule-2">
+        {(
+          [
+            ["detections", "Detections", "every frame"],
+            ["sightings", "Sightings", "each visit once"],
+          ] as const
+        ).map(([key, label, hint]) => (
+          <button
+            key={key}
+            onClick={() => setMode(key)}
+            className={`-mb-px border-b-2 pb-2 text-left transition-colors ${
+              mode === key
+                ? "border-accent-deep text-ink"
+                : "border-transparent text-muted hover:text-ink"
+            }`}
+          >
+            <span className="font-mono text-[11px] uppercase tracking-[0.14em]">
+              {label}
+            </span>
+            <span className="ml-1.5 font-serif text-[11px] italic text-muted">
+              {hint}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {mode === "sightings" && eventsLoading ? (
+        <div className="h-[160px] animate-pulse rounded bg-paper-2" />
+      ) : total === 0 ? (
         <p className="py-8 text-center font-serif text-sm italic text-muted">
-          No activity recorded in this period.
+          {mode === "sightings"
+            ? "No sightings recorded in this period."
+            : "No activity recorded in this period."}
         </p>
       ) : (
         <>
-          <ActivityChart data={data} max={max} peakIdx={peakIdx} />
+          <ActivityChart
+            data={data}
+            max={max}
+            peakIdx={peakIdx}
+            unit={mode === "sightings" ? "visits" : "obs"}
+          />
 
           {/* Axis labels */}
           <div className="mt-2 flex justify-between px-0 font-mono text-[9px] tracking-[0.1em] text-muted">
@@ -241,42 +379,40 @@ export default function ActivityMonitor({ streamId, longitude }: Props) {
             <span></span>
           </div>
 
-          {/* Footer stats */}
+          {/* Footer stats — sightings can report things a frame count can't,
+              like how long an animal actually stayed. */}
           <dl className="mt-[18px] grid grid-cols-3 gap-[18px] border-t border-rule pt-4">
-            <div>
-              <dt className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">
-                Peak hour
-              </dt>
-              <dd className="mt-1 font-serif text-[20px] font-medium tracking-tight">
-                {fmtHr(peakIdx)}
-                <small className="ml-1.5 font-mono text-[10px] font-normal tracking-[0.04em] text-muted">
-                  {data[peakIdx]} obs
-                </small>
-              </dd>
-            </div>
-            <div>
-              <dt className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">
-                Total
-              </dt>
-              <dd className="mt-1 font-serif text-[20px] font-medium tracking-tight">
-                {total}
-                <small className="ml-1.5 font-mono text-[10px] font-normal tracking-[0.04em] text-muted">
-                  obs
-                </small>
-              </dd>
-            </div>
-            <div>
-              <dt className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">
-                Day / night
-              </dt>
-              <dd className="mt-1 font-serif text-[20px] font-medium tracking-tight">
-                {dayPct}%
-                <small className="ml-1.5 font-mono text-[10px] font-normal tracking-[0.04em] text-muted">
-                  day
-                </small>
-              </dd>
-            </div>
+            <Metric
+              label="Peak hour"
+              value={fmtHr(peakIdx)}
+              unit={`${data[peakIdx]} ${mode === "sightings" ? "visits" : "obs"}`}
+            />
+            {mode === "sightings" ? (
+              <>
+                <Metric
+                  label="Sightings"
+                  value={String(eventSummary?.sighting_count ?? total)}
+                  unit={`${eventSummary?.species_count ?? 0} species`}
+                />
+                <Metric
+                  label="Longest visit"
+                  value={duration(eventSummary?.longest_seconds ?? 0)}
+                  unit={`${duration(eventSummary?.total_seconds ?? 0)} total`}
+                />
+              </>
+            ) : (
+              <>
+                <Metric label="Total" value={String(total)} unit="obs" />
+                <Metric label="Day / night" value={`${dayPct}%`} unit="day" />
+              </>
+            )}
           </dl>
+
+          {mode === "sightings" && (eventSummary?.open_count ?? 0) > 0 && (
+            <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.14em] text-accent-deep">
+              ● {eventSummary!.open_count} on screen now
+            </p>
+          )}
         </>
       )}
     </section>
