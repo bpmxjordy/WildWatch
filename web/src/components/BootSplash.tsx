@@ -2,78 +2,80 @@
 
 import { useEffect, useState } from "react";
 
-const TOTAL_MS = 2900;
+/**
+ * Total runtime, matched to the CSS timeline below. React only uses this to
+ * unmount the (already invisible) overlay afterwards — it does not drive the
+ * animation, so hydration being slow can't cut the effect short.
+ */
+const TOTAL_MS = 3800;
 
 /**
  * First-load splash: a camera viewfinder sweeps the screen hunting for a
  * subject, locks onto the bird from the logo, the wordmark resolves, and the
  * whole thing fades to reveal the site.
  *
- * Shown once per browser session, not on every route change — the App Router
- * keeps this layout mounted across client navigations, and sessionStorage
- * covers full reloads within the same session.
+ * Whether it plays is decided by the inline script in layout.tsx, before first
+ * paint, and communicated via `html.ww-splash-on`. That matters for two
+ * reasons:
  *
- * Deliberately skipped for `prefers-reduced-motion`: the entire point of this
- * component is motion, so the honest response to that preference is to get out
- * of the way rather than to play a subdued version.
+ *  - A skipped splash is never painted. Deciding in React meant the server
+ *    rendered the overlay, the browser painted it, and hydration then removed
+ *    it — a flash of splash on every repeat load.
+ *  - The animation is pure CSS keyed off that class, so it starts at paint and
+ *    runs its full course regardless of when hydration happens. Previously the
+ *    keyframes started at paint while the removal timer started at hydration,
+ *    so the two could drift apart.
+ *
+ * Shown on first load of a session; refreshes are skipped (navigation type
+ * "reload"). `?splash` forces it.
  */
 export default function BootSplash() {
-  const [phase, setPhase] = useState<"pending" | "playing" | "done">("pending");
+  const [mounted, setMounted] = useState(true);
 
   useEffect(() => {
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const seen = sessionStorage.getItem("ww-splash-seen");
-
-    if (reduced || seen) {
-      setPhase("done");
+    const root = document.documentElement;
+    if (!root.classList.contains("ww-splash-on")) {
+      // Never painted (display:none), so removing it now is invisible.
+      setMounted(false);
       return;
     }
 
-    sessionStorage.setItem("ww-splash-seen", "1");
-    setPhase("playing");
-
-    // Belt and braces: the overlay is pointer-events:none once faded, but a
-    // stuck splash would hide the whole site, so allow dismissing it too.
-    const finish = () => setPhase("done");
+    const finish = () => {
+      root.classList.remove("ww-splash-on");
+      setMounted(false);
+    };
     const timer = window.setTimeout(finish, TOTAL_MS);
-    window.addEventListener("keydown", finish);
+    // Let an impatient visitor skip it.
     window.addEventListener("pointerdown", finish);
+    window.addEventListener("keydown", finish);
 
     return () => {
       window.clearTimeout(timer);
-      window.removeEventListener("keydown", finish);
       window.removeEventListener("pointerdown", finish);
+      window.removeEventListener("keydown", finish);
     };
   }, []);
 
-  if (phase === "done") return null;
+  if (!mounted) return null;
 
   return (
-    <div className={`ww-splash${phase === "playing" ? " is-playing" : ""}`} aria-hidden="true">
+    <div className="ww-splash" aria-hidden="true">
       <style>{`
-        .ww-splash {
+        /* Inert unless the pre-paint script opted this load in. */
+        .ww-splash { display: none; }
+
+        html.ww-splash-on .ww-splash {
+          display: flex;
           position: fixed;
           inset: 0;
           z-index: 200;
-          display: flex;
           align-items: center;
           justify-content: center;
           background: #F5FFF6;
-          /* Opaque from first paint so the site never flashes through before
-             hydration. The fill matches --bg, so a repeat visitor who gets it
-             for a frame before the effect removes it sees nothing but the
-             page background.
-
-             ww-failsafe is the escape hatch: if JS never runs, the overlay
-             would otherwise cover the site permanently. */
           opacity: 1;
-          animation: ww-failsafe 400ms ease 6000ms forwards;
-        }
-        .ww-splash.is-playing {
-          animation: ww-reveal 600ms ease-in 2300ms forwards;
-        }
-        @keyframes ww-failsafe {
-          to { opacity: 0; visibility: hidden; }
+          /* Hold on the finished logo, then reveal. Runs from first paint, so
+             it completes even if hydration is slow. */
+          animation: ww-reveal 700ms ease-in 3100ms forwards;
         }
 
         .ww-stage {
@@ -86,12 +88,10 @@ export default function BootSplash() {
         }
 
         /* The viewfinder: four brackets that hunt across the screen, then
-           close in on the middle. Transform and opacity only, so the sweep
-           stays on the compositor. */
+           close in on the middle. */
         .ww-frame {
           position: absolute;
           inset: 0;
-          animation: ww-hunt 2000ms cubic-bezier(0.65, 0, 0.35, 1) forwards;
           will-change: transform, filter;
         }
         @keyframes ww-hunt {
@@ -104,11 +104,11 @@ export default function BootSplash() {
           100% { transform: translate(0, 0) scale(1); }
         }
 
-        /* Motion blur. Blur tracks speed: heaviest through the long sweeps,
-           gone by the time it settles, so the frame reads sharp once locked.
-           Paired with the trailing ghosts below -- blur alone reads as "out of
-           focus", the smear behind it is what reads as "moving fast". */
-        .ww-frame.lead {
+        /* Motion blur tracks speed: heaviest through the long sweeps, gone by
+           the time it settles, so the frame reads sharp once locked. Blur
+           alone reads as "out of focus" — the trailing copies below are what
+           read as "moving fast". */
+        html.ww-splash-on .ww-frame.lead {
           animation:
             ww-hunt 2000ms cubic-bezier(0.65, 0, 0.35, 1) forwards,
             ww-blur 2000ms cubic-bezier(0.65, 0, 0.35, 1) forwards;
@@ -121,15 +121,13 @@ export default function BootSplash() {
           100% { filter: blur(0); }
         }
 
-        /* Two lagging copies of the frame, blurrier and fainter, fading out as
-           the sweep slows. */
-        .ww-frame.ghost {
+        html.ww-splash-on .ww-frame.ghost {
           animation:
             ww-hunt 2000ms cubic-bezier(0.65, 0, 0.35, 1) forwards,
             ww-ghost 2000ms ease-out forwards;
         }
-        .ww-frame.g1 { animation-delay: 55ms, 0ms; }
-        .ww-frame.g2 { animation-delay: 110ms, 0ms; }
+        html.ww-splash-on .ww-frame.g1 { animation-delay: 55ms, 0ms; }
+        html.ww-splash-on .ww-frame.g2 { animation-delay: 110ms, 0ms; }
         @keyframes ww-ghost {
           0%   { opacity: 0.5; filter: blur(11px); }
           55%  { opacity: 0.32; filter: blur(9px); }
@@ -157,6 +155,8 @@ export default function BootSplash() {
           z-index: 1;
           opacity: 0;
           transform: scale(0.82);
+        }
+        html.ww-splash-on .ww-bird {
           animation: ww-lock 700ms cubic-bezier(0.34, 1.3, 0.64, 1) 1500ms forwards;
         }
         @keyframes ww-lock {
@@ -164,13 +164,17 @@ export default function BootSplash() {
           to   { opacity: 1; transform: scale(1); }
         }
 
+        /* Lands at 2750ms, comfortably before the 3100ms reveal — previously
+           the wordmark was still fading in as the overlay began fading out. */
         .ww-wordmark {
           position: absolute;
           top: calc(50% + 96px);
           opacity: 0;
           transform: translateY(6px);
-          animation: ww-word 600ms ease-out 2050ms forwards;
           white-space: nowrap;
+        }
+        html.ww-splash-on .ww-wordmark {
+          animation: ww-word 600ms ease-out 2150ms forwards;
         }
         @keyframes ww-word {
           to { opacity: 1; transform: translateY(0); }
@@ -182,7 +186,7 @@ export default function BootSplash() {
       `}</style>
 
       <div className="ww-stage">
-        {/* Ghosts render first so the sharp frame sits on top of its own smear */}
+        {/* Ghosts first, so the sharp frame sits on top of its own smear */}
         <div className="ww-frame ghost g2">
           <span className="ww-corner tl" />
           <span className="ww-corner tr" />

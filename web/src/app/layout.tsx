@@ -53,6 +53,31 @@ export default function RootLayout({
           href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"
           crossOrigin=""
         />
+        {/*
+          Decide whether the splash runs BEFORE first paint.
+
+          It can't be decided in React: the server has no access to
+          sessionStorage, so it always renders the overlay, and by the time
+          hydration could remove it the browser has already painted it — a
+          flash of splash on every repeat load. A blocking inline script sets
+          the class first, and the CSS keys off it, so a skipped splash is
+          never painted at all.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{
+  var force = location.search.indexOf('splash') > -1;
+  var nav = performance.getEntriesByType('navigation')[0];
+  var isReload = nav && nav.type === 'reload';
+  var seen = sessionStorage.getItem('ww-splash-seen');
+  var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (force || (!reduced && !isReload && !seen)) {
+    document.documentElement.className += ' ww-splash-on';
+    sessionStorage.setItem('ww-splash-seen','1');
+  }
+}catch(e){}})();`,
+          }}
+        />
       </head>
       <body>
         <Providers>
