@@ -55,10 +55,48 @@ def compute_stream_stats(supabase: Client, stream_id: str) -> dict:
             for row in species_rows
         ]
 
+        # Sightings (species_events) for the same window. Pre-computed here for
+        # the same reason as detections: so a page view is one read of this row
+        # rather than a query per visitor.
+        event_hourly_rows = supabase.rpc(
+            "get_event_hourly_since", {"p_stream_id": stream_id, "p_since": since}
+        ).execute().data or []
+        event_hourly = [0] * 24
+        for row in event_hourly_rows:
+            h = row["hour"]
+            if 0 <= h < 24:
+                event_hourly[h] = row["sighting_count"]
+
+        summary_rows = supabase.rpc(
+            "get_event_summary_since", {"p_stream_id": stream_id, "p_since": since}
+        ).execute().data or []
+        summary = (summary_rows or [{}])[0]
+
+        event_species_rows = supabase.rpc(
+            "get_events_since", {"p_stream_id": stream_id, "p_since": since}
+        ).execute().data or []
+
         stats[period_key] = {
             "hourly": hourly,
             "total": sum(hourly),
             "species": species,
+            "events": {
+                "hourly": event_hourly,
+                "total": int(summary.get("sighting_count") or 0),
+                "species_count": int(summary.get("species_count") or 0),
+                "total_seconds": round(summary.get("total_seconds") or 0),
+                "longest_seconds": round(summary.get("longest_seconds") or 0),
+                "open_count": int(summary.get("open_count") or 0),
+                "species": [
+                    {
+                        "common_name": row["common_name"],
+                        "count": row["sighting_count"],
+                        "avg_seconds": round(row["avg_seconds"] or 0),
+                        "total_seconds": round(row["total_seconds"] or 0),
+                    }
+                    for row in event_species_rows[:10]
+                ],
+            },
         }
 
     return stats

@@ -155,21 +155,6 @@ function Metric({
   );
 }
 
-interface EventSummary {
-  sighting_count: number;
-  species_count: number;
-  total_seconds: number;
-  longest_seconds: number;
-  open_count: number;
-}
-
-const PERIOD_HOURS: Record<PeriodKey, number> = {
-  "24h": 24,
-  "48h": 48,
-  "7d": 24 * 7,
-  "30d": 24 * 30,
-};
-
 type Mode = "detections" | "sightings";
 
 export default function ActivityMonitor({ streamId, longitude }: Props) {
@@ -179,45 +164,10 @@ export default function ActivityMonitor({ streamId, longitude }: Props) {
   const [mode, setMode] = useState<Mode>("detections");
   const offset = getUtcOffset(longitude);
 
-  // Sightings are queried live -- species_events holds one row per visit, so
-  // unlike detections it doesn't need the pre-computed stream_stats path.
-  const [eventHourly, setEventHourly] = useState<number[] | null>(null);
-  const [eventSummary, setEventSummary] = useState<EventSummary | null>(null);
-  const [eventsLoading, setEventsLoading] = useState(false);
-
-  useEffect(() => {
-    if (mode !== "sightings") return;
-    let cancelled = false;
-    const supabase = createClient();
-    const since = new Date(
-      Date.now() - PERIOD_HOURS[period] * 3600 * 1000
-    ).toISOString();
-
-    async function loadEvents() {
-      setEventsLoading(true);
-      const [hourly, summary] = await Promise.all([
-        (supabase as any).rpc("get_event_hourly_since", {
-          p_stream_id: streamId,
-          p_since: since,
-        }),
-        (supabase as any).rpc("get_event_summary_since", {
-          p_stream_id: streamId,
-          p_since: since,
-        }),
-      ]);
-      if (cancelled) return;
-      const buckets = Array.from({ length: 24 }, () => 0);
-      for (const r of hourly.data ?? []) buckets[r.hour] = r.sighting_count;
-      setEventHourly(buckets);
-      setEventSummary((summary.data ?? [])[0] ?? null);
-      setEventsLoading(false);
-    }
-
-    loadEvents();
-    return () => {
-      cancelled = true;
-    };
-  }, [streamId, period, mode]);
+  // Sightings ride along in the same pre-computed stream_stats row the
+  // detection charts already read, so switching tabs or periods costs no
+  // further requests -- the whole panel is one read per visitor.
+  const events = stats?.[period]?.events;
 
   useEffect(() => {
     async function fetch() {
@@ -259,7 +209,7 @@ export default function ActivityMonitor({ streamId, longitude }: Props) {
   const detectionHourly = periodData?.hourly ?? Array.from({ length: 24 }, () => 0);
   const rawHourly =
     mode === "sightings"
-      ? eventHourly ?? Array.from({ length: 24 }, () => 0)
+      ? events?.hourly ?? Array.from({ length: 24 }, () => 0)
       : detectionHourly;
 
   const data = useMemo(() => {
@@ -301,9 +251,7 @@ export default function ActivityMonitor({ streamId, longitude }: Props) {
         </h3>
         <div className="flex items-center gap-1">
           {PERIODS.map((p) => {
-            // Sightings are queried live for any window, so the period buttons
-            // aren't gated on which pre-computed stats happen to exist.
-            const available = mode === "sightings" ? true : stats?.[p.key];
+            const available = stats?.[p.key];
             return (
               <button
                 key={p.key}
@@ -327,35 +275,46 @@ export default function ActivityMonitor({ streamId, longitude }: Props) {
       {/* Detections count every frame an animal appeared in; sightings count
           each visit once. They disagree by design, so they're separate views
           of the same window rather than one blended number. */}
-      <div className="mb-4 flex gap-4 border-b border-rule-2">
+      <div
+        role="tablist"
+        aria-label="Count animals by"
+        className="mb-4 grid grid-cols-2 gap-1 rounded-lg border border-rule bg-paper-2 p-1"
+      >
         {(
           [
-            ["detections", "Detections", "every frame"],
-            ["sightings", "Sightings", "each visit once"],
+            ["detections", "Detections", "every frame counted"],
+            ["sightings", "Sightings", "each visit counted once"],
           ] as const
-        ).map(([key, label, hint]) => (
-          <button
-            key={key}
-            onClick={() => setMode(key)}
-            className={`-mb-px border-b-2 pb-2 text-left transition-colors ${
-              mode === key
-                ? "border-accent-deep text-ink"
-                : "border-transparent text-muted hover:text-ink"
-            }`}
-          >
-            <span className="font-mono text-[11px] uppercase tracking-[0.14em]">
-              {label}
-            </span>
-            <span className="ml-1.5 font-serif text-[11px] italic text-muted">
-              {hint}
-            </span>
-          </button>
-        ))}
+        ).map(([key, label, hint]) => {
+          const active = mode === key;
+          return (
+            <button
+              key={key}
+              role="tab"
+              aria-selected={active}
+              onClick={() => setMode(key)}
+              className={`rounded-md px-3 py-2 text-center transition-colors ${
+                active
+                  ? "bg-[#1e3320] text-white shadow-sm"
+                  : "text-ink hover:bg-[var(--bg)]"
+              }`}
+            >
+              <span className="block font-mono text-[11.5px] font-medium uppercase tracking-[0.14em]">
+                {label}
+              </span>
+              <span
+                className={`mt-0.5 block font-serif text-[11px] italic ${
+                  active ? "text-white/70" : "text-muted"
+                }`}
+              >
+                {hint}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      {mode === "sightings" && eventsLoading ? (
-        <div className="h-[160px] animate-pulse rounded bg-paper-2" />
-      ) : total === 0 ? (
+      {total === 0 ? (
         <p className="py-8 text-center font-serif text-sm italic text-muted">
           {mode === "sightings"
             ? "No sightings recorded in this period."
@@ -391,13 +350,13 @@ export default function ActivityMonitor({ streamId, longitude }: Props) {
               <>
                 <Metric
                   label="Sightings"
-                  value={String(eventSummary?.sighting_count ?? total)}
-                  unit={`${eventSummary?.species_count ?? 0} species`}
+                  value={String(events?.total ?? total)}
+                  unit={`${events?.species_count ?? 0} species`}
                 />
                 <Metric
                   label="Longest visit"
-                  value={duration(eventSummary?.longest_seconds ?? 0)}
-                  unit={`${duration(eventSummary?.total_seconds ?? 0)} total`}
+                  value={duration(events?.longest_seconds ?? 0)}
+                  unit={`${duration(events?.total_seconds ?? 0)} total`}
                 />
               </>
             ) : (
@@ -408,11 +367,6 @@ export default function ActivityMonitor({ streamId, longitude }: Props) {
             )}
           </dl>
 
-          {mode === "sightings" && (eventSummary?.open_count ?? 0) > 0 && (
-            <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.14em] text-accent-deep">
-              ● {eventSummary!.open_count} on screen now
-            </p>
-          )}
         </>
       )}
     </section>

@@ -229,6 +229,21 @@ export type StreamInsert = Database["public"]["Tables"]["streams"]["Insert"];
 export type Detection = Database["public"]["Tables"]["detections"]["Row"];
 export type SpeciesEvent = Database["public"]["Tables"]["species_events"]["Row"];
 
+export interface EventStats {
+  hourly: number[];
+  total: number;
+  species_count: number;
+  total_seconds: number;
+  longest_seconds: number;
+  open_count: number;
+  species: {
+    common_name: string;
+    count: number;
+    avg_seconds: number;
+    total_seconds: number;
+  }[];
+}
+
 export interface StreamStats {
   stream_id: string;
   stats: {
@@ -236,6 +251,8 @@ export interface StreamStats {
       hourly: number[];
       total: number;
       species: { common_name: string; count: number; avg_confidence: number }[];
+      /** Sightings for the same window. Absent until the agent next refreshes. */
+      events?: EventStats;
     };
   };
   computed_at: string;
