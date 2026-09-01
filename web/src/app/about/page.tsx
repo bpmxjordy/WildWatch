@@ -28,27 +28,27 @@ const STEPS = [
   {
     num: "I.",
     title: "Frame capture",
-    desc: "Every camera is sampled once a minute. Most are snapshot endpoints fetched over plain HTTP; the rest are HLS playlists, where ffmpeg resolves the stream and pulls a single frame. Cameras are sampled in parallel, and one that goes offline backs off rather than blocking the rest.",
+    desc: "Once a minute, every camera in the network gives up a single frame. Most arrive as plain snapshots over HTTP; the true video feeds are HLS streams that ffmpeg opens just long enough to take one picture. Cameras are polled in parallel, and one that has gone dark is set aside to retry later rather than holding up the line.",
   },
   {
     num: "II.",
     title: "Detection",
-    desc: "Each frame goes to Google's SpeciesNet — MegaDetector v5 finds the animals, then an EfficientNet V2 classifier identifies them, running on a local GPU in batches. Every distinct animal in a frame is recorded, not just the most obvious one.",
+    desc: "The frame goes to Google's SpeciesNet, running on a local GPU. MegaDetector v5 draws a box around every animal it can find, and an EfficientNet V2 classifier says what each one is. Everything in the frame is recorded — the fox at the edge as well as the deer in the middle.",
   },
   {
     num: "III.",
-    title: "Deciding what it is",
-    desc: "Classifier confidence is summed up the taxonomic tree, and the deepest rank that clears its threshold wins — so an uncertain guess becomes 'Penguin' rather than flickering between ten lookalike species. A rolling vote across recent frames from the same camera then settles the label, which sharpens as evidence accumulates instead of changing frame to frame.",
+    title: "Putting a name to it",
+    desc: "A single frame is a poor witness. Classifier confidence is summed up the taxonomic tree, and the deepest rank that clears its bar wins — so a hesitant guess settles at 'Penguin' rather than cycling through ten lookalike species. Recent frames from the same camera then vote among themselves, and the label firms up as the evidence does.",
   },
   {
     num: "IV.",
     title: "From frames to sightings",
-    desc: "A bear standing in a river for twenty minutes is one visit, not twenty discoveries. Consecutive frames showing the same species are folded into a single sighting with a start, an end, and the clearest image captured while it was there. Both views are kept: detections measure how much the camera saw, sightings measure how many animals turned up.",
+    desc: "A bear that fishes the same stretch of river for twenty minutes is one visit, not twenty discoveries. Runs of frames showing the same species collapse into a single sighting: when it arrived, when it left, and the clearest picture taken while it was there. The per-frame record survives alongside it — one number for how busy the camera was, another for how many animals actually came.",
   },
   {
     num: "V.",
     title: "Serving it",
-    desc: "Activity statistics are aggregated once a day per camera and cached, so opening a page is a single read rather than a query per visitor. Snapshots are pruned after two weeks; the much smaller detection records are kept for a year, which is what the long-range charts are drawn from.",
+    desc: "Each camera's statistics are totalled once a day and cached, so opening a page costs one read, not a fresh query per visitor. Snapshots live for two weeks. The detection records behind the charts are far smaller, and those are kept for a year.",
   },
 ];
 
@@ -92,10 +92,11 @@ export default async function AboutPage() {
           together.
         </h1>
         <p className="max-w-[52ch] text-[17px] leading-relaxed text-ink-2">
-          WildWatch watches public wildlife cameras so you don&apos;t have to sit
-          through the quiet hours. Every camera is checked once a minute, every
-          animal that walks into frame is identified and catalogued, and what
-          turned up — and when — is there whether or not anyone was looking.
+          Public wildlife cameras stream around the clock, mostly to no one.
+          WildWatch keeps them company. Every camera in the network is checked
+          once a minute, every animal that steps into frame is named and noted,
+          and the record of who came, and when, is waiting here — whether or not
+          anyone happened to be watching.
         </p>
       </div>
 
@@ -146,13 +147,13 @@ export default async function AboutPage() {
           What the labels are worth
         </h3>
         <p className="max-w-[58ch] text-[14.5px] leading-relaxed text-ink-2">
-          These are automated guesses, not verified records. The model does
-          better with a large animal filling the frame than with something small,
-          distant, or half-hidden in undergrowth, and it is more confident about
-          common species than rare ones. Where it can&apos;t reach a species it
-          says so, naming a family or simply &ldquo;Bird&rdquo; rather than
-          inventing detail. Boxes are drawn onto each snapshot at the moment of
-          inference, so what you see is exactly what the model saw.
+          Every label on this site is a machine&apos;s best guess, not a
+          verified record. The model is good at a large animal in plain view and
+          worse at anything small, distant, or half-behind a branch; it knows
+          common species better than rare ones. When it can&apos;t reach a
+          species it doesn&apos;t pretend to — it stops at a family, or simply
+          says &ldquo;Bird.&rdquo; The boxes are drawn onto each snapshot at the
+          moment of inference, so what you see is exactly what the model saw.
         </p>
       </div>
 
@@ -162,11 +163,11 @@ export default async function AboutPage() {
           The cameras
         </h3>
         <p className="max-w-[58ch] text-[14.5px] leading-relaxed text-ink-2">
-          WildWatch runs no cameras of its own. Every stream belongs to the zoos,
-          reserves and conservation organisations who set them up, maintain them
-          and pay for the bandwidth — the work here is only in watching them.
-          Each camera page links back to its source, and the best way to see any
-          of these animals is on the stream its keepers built.
+          WildWatch owns no cameras. Every stream here belongs to a zoo, a
+          reserve, or a conservation group that mounted it, aims it, and pays
+          for the bandwidth; our part is only the watching. Each camera page
+          links back to its source — and if one of these animals is worth your
+          time, it&apos;s worth seeing on the stream its keepers built.
         </p>
       </div>
 
