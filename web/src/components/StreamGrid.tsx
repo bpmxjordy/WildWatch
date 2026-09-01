@@ -14,9 +14,11 @@ import FeaturedStreams from "./FeaturedStreams";
 
 interface StreamGridProps {
   initialStreams: Stream[];
+  /** ms epoch when the server captured `initialStreams`. */
+  generatedAt: number;
 }
 
-export default function StreamGrid({ initialStreams }: StreamGridProps) {
+export default function StreamGrid({ initialStreams, generatedAt }: StreamGridProps) {
   const streams = initialStreams;
   const [search, setSearch] = useState("");
   const [showAnimalsOnly, setShowAnimalsOnly] = useState(false);
@@ -54,7 +56,10 @@ export default function StreamGrid({ initialStreams }: StreamGridProps) {
     }
 
     if (showAnimalsOnly) {
-      const now = Date.now();
+      // Compare against when the data was captured, not now -- this page is
+      // served from an ISR cache, so Date.now() can be far ahead of the
+      // timestamps in `streams` and would reject every one of them.
+      const now = generatedAt;
       result = result.filter((s) => {
         if (
           s.latest_detection_category !== "animal" ||
@@ -99,7 +104,7 @@ export default function StreamGrid({ initialStreams }: StreamGridProps) {
     }
 
     return result;
-  }, [streams, search, showAnimalsOnly, categoryFilter, speciesFilter, sort]);
+  }, [streams, search, showAnimalsOnly, categoryFilter, speciesFilter, sort, generatedAt]);
 
   // Cameras that play inline here rather than linking out.
   const featured = useMemo(
@@ -107,12 +112,13 @@ export default function StreamGrid({ initialStreams }: StreamGridProps) {
     [streams]
   );
 
-  // Any narrowing of the list hides the featured row -- once the visitor has
-  // said what they're after, a fixed set of cameras is just in the way. Sort
-  // doesn't count: it reorders rather than narrows.
-  const isFiltered = Boolean(
-    search || categoryFilter || speciesFilter || showAnimalsOnly
-  );
+  // Searching or picking a category/species hides the featured rail -- the
+  // visitor has said what they're after and a fixed set of cameras is in the
+  // way. "Active detections only" deliberately doesn't count: it's a view
+  // toggle rather than a hunt for something specific, and the featured cameras
+  // are still worth watching while it's on. Sort doesn't count either -- it
+  // reorders rather than narrows.
+  const isFiltered = Boolean(search || categoryFilter || speciesFilter);
 
   return (
     <div>

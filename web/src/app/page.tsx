@@ -13,6 +13,13 @@ export default async function HomePage() {
 
   const liveCount = streams?.filter((s) => s.is_live).length ?? 0;
 
+  // When this snapshot was taken. `revalidate` above means the rendered page
+  // can be served from cache long after it was built, so "is this detection
+  // recent?" has to be measured against the data's own clock. Measured against
+  // the browser's clock instead, every stream in a cached page looks stale and
+  // "active detections only" silently empties the grid.
+  const generatedAt = Date.now();
+
   return (
     <div>
       <div className="mb-8">
@@ -29,7 +36,7 @@ export default async function HomePage() {
           </span>
         </p>
       </div>
-      <StreamGrid initialStreams={streams ?? []} />
+      <StreamGrid initialStreams={streams ?? []} generatedAt={generatedAt} />
     </div>
   );
 }
